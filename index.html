@@ -526,7 +526,22 @@ if(typeof supabase === "undefined" || !supabase.createClient){
 }
 
 const { createClient } = supabase;
-const db = createClient(SURL, SKEY);
+
+// Safari iOS pode bloquear localStorage em contexto OAuth
+// Usar wrapper que cai em sessionStorage se localStorage falhar
+var safeStorage = (function(){
+  try{ localStorage.setItem("_t","1");localStorage.removeItem("_t");return localStorage; }
+  catch(e){ return sessionStorage; }
+})();
+
+const db = createClient(SURL, SKEY, {
+  auth: {
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: safeStorage
+  }
+});
 
 var currentUser = null;
 var entries=[], tasks=[], events=[], reminders=[], dayNotes={};
@@ -633,39 +648,49 @@ async function loadAllData(){
 // ===== INIT =====
 var appReady=false;
 
-// Timeout de segurança: se supabase não responder em 8s, mostra tela de login
+// Timeout de segurança: se supabase não responder em 10s, mostra tela de login
 var initTimeout=setTimeout(function(){
   if(!appReady){
+    console.warn("[Lineo] timeout — mostrando auth");
     showLoading(false);
     showAuth();
   }
-},8000);
+},10000);
+
+// iOS Safari: se voltou do OAuth com hash na URL, processar antes de qualquer coisa
+(function(){
+  var h=window.location.hash;
+  if(h&&h.indexOf("access_token")>=0){
+    console.log("[Lineo] access_token detectado no hash — aguardando Supabase processar...");
+    // Limpar o hash sem recarregar (evita loop)
+    window.history.replaceState(null,"",window.location.pathname+window.location.search);
+  }
+})();
 
 db.auth.onAuthStateChange(async function(event, session){
-  if(event==="INITIAL_SESSION"){
+  console.log("[Lineo] auth event:", event, session?"user="+session.user.email:"no session");
+
+  if(event==="INITIAL_SESSION"||event==="SIGNED_IN"){
+    if(appReady)return; // já carregado
     if(session&&session.user){
+      clearTimeout(initTimeout);
       currentUser=session.user;
       await loadAllData();
       appReady=true;
       lastReload=Date.now();
       showApp();
-    } else {
+    } else if(event==="INITIAL_SESSION"){
+      // Só mostra auth se for o evento inicial sem sessão
+      // SIGNED_IN sem session não deveria acontecer, mas por segurança ignoramos
+      clearTimeout(initTimeout);
       showLoading(false);
       showAuth();
     }
     return;
   }
 
-  if(event==="SIGNED_IN"&&session&&session.user&&!appReady){
-    if(window.location.hash&&window.location.hash.indexOf("access_token")>=0){
-      window.history.replaceState(null,"",window.location.pathname);
-    }
+  if(event==="TOKEN_REFRESHED"&&session&&session.user){
     currentUser=session.user;
-    await loadAllData();
-    appReady=true;
-    lastReload=Date.now();
-    clearTimeout(initTimeout);
-    showApp();
     return;
   }
 
