@@ -101,6 +101,12 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .dptitle{font-size:16px;font-weight:700}
 .dsec{margin-bottom:20px}
 .dseclbl{font-size:12px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.dquickadd{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.dqbtn{flex:1;min-width:100px;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--s2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:.15s;font-family:Inter,sans-serif}
+.dqbtn:hover{background:var(--al);border-color:var(--b2);transform:translateY(-1px)}
+.dminibtn{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;transition:.15s}
+.dminibtn:hover{background:var(--al);border-color:var(--accent)}
+@media(max-width:480px){.dquickadd{flex-direction:column}.dqbtn{width:100%}}
 .dnitem{background:var(--s2);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;position:relative;padding-right:40px}
 .dntimestamp{font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:500}
 .dntext{font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
@@ -357,10 +363,12 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <div id="dpanel" style="display:none" class="dpanel">
         <div class="dphdr">
           <div class="dptitle" id="dptitle">-</div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-s sm" onclick="openEventModal(selDay)">+ Evento</button>
-            <button class="btn btn-g sm" onclick="closeDayPanel()">Fechar</button>
-          </div>
+          <button class="btn btn-g sm" onclick="closeDayPanel()">Fechar</button>
+        </div>
+        <div class="dquickadd">
+          <button class="dqbtn" onclick="openEventModal(selDay)"><span style="color:var(--accent)">&#128197;</span> Evento</button>
+          <button class="dqbtn" onclick="openNewTask(selDay)"><span style="color:var(--warn)">&#9989;</span> Tarefa</button>
+          <button class="dqbtn" onclick="openReminderModal(selDay)"><span style="color:#6B4FBB">&#128276;</span> Lembrete</button>
         </div>
         <div class="dsec">
           <div class="dseclbl">Anotacoes do dia</div>
@@ -370,8 +378,20 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
             <button class="btn btn-p sm" onclick="addDayNote()" style="align-self:flex-end">Salvar</button>
           </div>
         </div>
-        <div class="dsec"><div class="dseclbl">Eventos</div><div id="devlist"></div></div>
-        <div class="dsec"><div class="dseclbl">Tarefas para este dia</div><div id="dtlist"></div></div>
+        <div class="dsec">
+          <div class="dseclbl" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Eventos</span>
+            <button class="dminibtn" onclick="openEventModal(selDay)" title="Adicionar evento">+</button>
+          </div>
+          <div id="devlist"></div>
+        </div>
+        <div class="dsec">
+          <div class="dseclbl" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Tarefas para este dia</span>
+            <button class="dminibtn" onclick="openNewTask(selDay)" title="Adicionar tarefa">+</button>
+          </div>
+          <div id="dtlist"></div>
+        </div>
         <div class="dsec"><div class="dseclbl">Registros do diario</div><div id="drlist"></div></div>
       </div>
     </div>
@@ -379,7 +399,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div id="page-lembretes" class="page">
       <div class="sechdr">
         <div><div class="sectitle">Lembretes</div><div class="secsub">Alertas sonoros enquanto o app estiver aberto</div></div>
-        <button class="btn btn-p" onclick="openM('m-rem')">+ Novo lembrete</button>
+        <button class="btn btn-p" onclick="openReminderModal(todayStr())">+ Novo lembrete</button>
       </div>
       <div id="rlist"></div>
     </div>
@@ -1422,12 +1442,12 @@ window.addEventListener("focus",function(){reloadIfNeeded(false);});
 setInterval(function(){reloadIfNeeded(false);},60000);
 
 // ===== TASKS =====
-function openNewTask(){
+function openNewTask(ds){
   document.getElementById("tid").value="";
   document.getElementById("ttxt").value="";
   document.getElementById("tcat").value="Pessoal";
   document.getElementById("tprio").value="Media";
-  document.getElementById("tdue").value="";
+  document.getElementById("tdue").value=ds||"";
   document.getElementById("tnotes").value="";
   document.getElementById("tm-title").textContent="Nova tarefa";
   clrErr(["ttxt"]);openM("m-task");
@@ -1798,6 +1818,12 @@ async function delEvent(id){
 }
 
 // ===== REMINDERS =====
+function openReminderModal(ds){
+  document.getElementById("rlbl").value="";
+  document.getElementById("rdate").value=ds||todayStr();
+  document.getElementById("rtime").value="";
+  clrErr(["rlbl","rdate","rtime"]);openM("m-rem");
+}
 async function saveReminder(){
   var lbl=document.getElementById("rlbl").value.trim();
   var date=document.getElementById("rdate").value;
