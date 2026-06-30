@@ -949,8 +949,9 @@ function renderHomeTasks(){
     var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[t.priority]||"bm";
     var dueLbl=t.due?(t.due===today?"Hoje":fmtDate(t.due)):"Sem data";
     var dueColor=t.due===today?"color:var(--err);font-weight:600":"color:var(--t3)";
-    html+='<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:6px">'+
-      '<div class="tchk" data-id="'+t.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'));renderHomeTasks()" style="flex-shrink:0"></div>'+
+    var clickAction=t.due?"navToCalDay('"+t.due+"')":"editTask('"+t.id+"')";
+    html+='<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:6px;cursor:pointer" onclick="'+clickAction+'">'+
+      '<div class="tchk" data-id="'+t.id+'" onclick="event.stopPropagation();toggleTask(this.getAttribute(\'data-id\'));renderHomeTasks()" style="flex-shrink:0"></div>'+
       '<div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+t.text+'</div>'+
       '<div style="display:flex;gap:8px;margin-top:3px;align-items:center">'+
       '<span class="badge '+pc+'" style="font-size:11px">'+t.priority+'</span>'+
@@ -1666,10 +1667,14 @@ function renderDayTasks(ds){
   for(var i=0;i<t.length;i++){
     var x=t[i];var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[x.priority]||"bm";
     html+='<div class="titem'+(x.done?" done":"")+'" style="margin-bottom:8px">'+
-      '<div class="tchk'+(x.done?" chk":"")+'" data-id="'+x.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'))"></div>'+
+      '<div class="tchk'+(x.done?" chk":"")+'" data-id="'+x.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'));renderDayTasks(\''+ds+'\')"></div>'+
       '<div style="flex:1"><div class="ttxt">'+x.text+"</div>"+
       '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+x.category+"</span>"+
-      '<span class="badge '+pc+'">'+x.priority+"</span></div></div></div>";
+      '<span class="badge '+pc+'">'+x.priority+"</span></div></div>"+
+      '<div style="display:flex;gap:4px;flex-shrink:0">'+
+      '<button class="ibtn" data-id="'+x.id+'" onclick="editTask(this.getAttribute(\'data-id\'))">&#9999;</button>'+
+      '<button class="ibtn red" data-id="'+x.id+'" onclick="delTask(this.getAttribute(\'data-id\'))">&#128465;</button>'+
+      '</div></div>';
   }
   el.innerHTML=html;
 }
