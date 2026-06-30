@@ -501,7 +501,30 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <div style="min-width:0"><label class="lbl">Inicio</label><input class="inp" type="time" id="evtime" style="width:100%;min-width:0;box-sizing:border-box"></div>
       <div style="min-width:0"><label class="lbl">Termino</label><input class="inp" type="time" id="evtime_end" style="width:100%;min-width:0;box-sizing:border-box"></div>
     </div>
+    <div class="fg"><label class="lbl">Recorrencia</label>
+      <select class="inp sel" id="evrecur" onchange="toggleRecurEnd()" style="width:100%">
+        <option value="">Nao se repete</option>
+        <option value="daily">Diariamente</option>
+        <option value="weekly">Semanalmente</option>
+        <option value="monthly">Mensalmente</option>
+      </select>
+    </div>
+    <div class="fg" id="evrecur-end-wrap" style="display:none">
+      <label class="lbl">Repetir ate</label>
+      <input class="inp" type="date" id="evrecur_end" style="width:100%;min-width:0;box-sizing:border-box">
+    </div>
+    <div class="fg"><label class="lbl">Local</label><input class="inp" id="evlocal" placeholder="Endereco ou nome do lugar" style="width:100%"></div>
     <div class="fg"><label class="lbl">Descricao</label><textarea class="inp" id="evdesc" placeholder="Detalhes opcionais..." style="min-height:72px;resize:vertical;width:100%"></textarea></div>
+    <div class="fg"><label class="lbl">Cor do evento</label>
+      <div style="display:flex;gap:10px">
+        <div class="evcolor-dot" data-color="#2A9D7C" onclick="selectEvColor('#2A9D7C')" style="width:28px;height:28px;border-radius:50%;background:#2A9D7C;cursor:pointer;border:2px solid transparent"></div>
+        <div class="evcolor-dot" data-color="#E8935A" onclick="selectEvColor('#E8935A')" style="width:28px;height:28px;border-radius:50%;background:#E8935A;cursor:pointer;border:2px solid transparent"></div>
+        <div class="evcolor-dot" data-color="#7B9E87" onclick="selectEvColor('#7B9E87')" style="width:28px;height:28px;border-radius:50%;background:#7B9E87;cursor:pointer;border:2px solid transparent"></div>
+        <div class="evcolor-dot" data-color="#5B6AF0" onclick="selectEvColor('#5B6AF0')" style="width:28px;height:28px;border-radius:50%;background:#5B6AF0;cursor:pointer;border:2px solid transparent"></div>
+        <div class="evcolor-dot" data-color="#D94040" onclick="selectEvColor('#D94040')" style="width:28px;height:28px;border-radius:50%;background:#D94040;cursor:pointer;border:2px solid transparent"></div>
+      </div>
+      <input type="hidden" id="evcolor" value="#2A9D7C">
+    </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap">
       <button class="btn btn-s" onclick="closeM('m-event')">Cancelar</button>
       <button class="btn btn-p" onclick="saveEvent()">Salvar evento</button>
@@ -1510,15 +1533,19 @@ function renderDayEvents(ds){
     var ev=evts[i];
     var tRange="";
     if(ev.event_time){tRange=ev.event_time+(ev.event_time_end?" – "+ev.event_time_end:"");}
-    html+='<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;background:var(--al);border-radius:var(--r);margin-bottom:8px">'+
-      (tRange?'<div style="font-weight:700;color:var(--accent);min-width:80px;font-size:13px;padding-top:2px;white-space:nowrap">'+tRange+"</div>":"")+
+    var color=ev.color||"var(--accent)";
+    html+='<div style="display:flex;align-items:stretch;gap:0;background:var(--al);border-radius:var(--r);margin-bottom:8px;overflow:hidden">'+
+      '<div style="width:4px;background:'+color+';flex-shrink:0"></div>'+
+      '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;flex:1">'+
+      (tRange?'<div style="font-weight:700;color:'+color+';min-width:80px;font-size:13px;padding-top:2px;white-space:nowrap">'+tRange+"</div>":"")+
       '<div style="flex:1"><div style="font-weight:500;font-size:14px">'+ev.title+"</div>"+
+      (ev.location?'<div style="font-size:12px;color:var(--t3);margin-top:2px">&#128205; '+ev.location+"</div>":"")+
       (ev.description?'<div style="font-size:12px;color:var(--t2);margin-top:2px">'+ev.description+"</div>":"")+
       "</div>"+
       '<div style="display:flex;gap:4px;flex-shrink:0">'+
       '<button class="ibtn" data-id="'+ev.id+'" onclick="editEvent(this.getAttribute(\'data-id\'))">&#9999;</button>'+
       '<button class="ibtn red" data-id="'+ev.id+'" onclick="delEvent(this.getAttribute(\'data-id\'))">&#128465;</button>'+
-      '</div></div>';
+      '</div></div></div>';
   }
   el.innerHTML=html;
 }
@@ -1557,6 +1584,11 @@ function openEventModal(ds){
   document.getElementById("evtime").value="";
   document.getElementById("evtime_end").value="";
   document.getElementById("evdesc").value="";
+  document.getElementById("evlocal").value="";
+  document.getElementById("evrecur").value="";
+  document.getElementById("evrecur_end").value="";
+  document.getElementById("evrecur-end-wrap").style.display="none";
+  selectEvColor("#2A9D7C");
   document.getElementById("evm-title").textContent="Novo evento";
   clrErr(["evtitle","evdate"]);openM("m-event");
 }
@@ -1570,8 +1602,33 @@ function editEvent(id){
   document.getElementById("evtime").value=ev.event_time||"";
   document.getElementById("evtime_end").value=ev.event_time_end||"";
   document.getElementById("evdesc").value=ev.description||"";
+  document.getElementById("evlocal").value=ev.location||"";
+  document.getElementById("evrecur").value="";
+  document.getElementById("evrecur_end").value="";
+  document.getElementById("evrecur-end-wrap").style.display="none";
+  selectEvColor(ev.color||"#2A9D7C");
   document.getElementById("evm-title").textContent="Editar evento";
   clrErr(["evtitle","evdate"]);openM("m-event");
+}
+function selectEvColor(c){
+  document.getElementById("evcolor").value=c;
+  document.querySelectorAll(".evcolor-dot").forEach(function(d){
+    d.style.border=d.getAttribute("data-color")===c?"2px solid #2C2C28":"2px solid transparent";
+  });
+}
+function toggleRecurEnd(){
+  var v=document.getElementById("evrecur").value;
+  document.getElementById("evrecur-end-wrap").style.display=v?"block":"none";
+}
+function addDays(dateStr,n){
+  var d=new Date(dateStr+"T12:00:00");
+  d.setDate(d.getDate()+n);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function addMonths(dateStr,n){
+  var d=new Date(dateStr+"T12:00:00");
+  d.setMonth(d.getMonth()+n);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 }
 async function saveEvent(){
   var title=document.getElementById("evtitle").value.trim();
@@ -1579,21 +1636,74 @@ async function saveEvent(){
   clrErr(["evtitle","evdate"]);
   if(!title){setErr("evtitle","O titulo e obrigatorio.");return}
   if(!date){setErr("evdate","Escolha uma data.");return}
-  var id=document.getElementById("evid").value||(""+Date.now());
-  var row={id:id,user_id:currentUser.id,title:title,date:date,event_time:document.getElementById("evtime").value,event_time_end:document.getElementById("evtime_end").value,description:document.getElementById("evdesc").value};
-  await db.from("events").upsert(row);
-  var idx=-1;
-  for(var i=0;i<events.length;i++){if(events[i].id===id){idx=i;break}}
-  if(idx>=0)events[idx]=row;else events.push(row);
+  var editId=document.getElementById("evid").value;
+  var recur=document.getElementById("evrecur").value;
+  var recurEnd=document.getElementById("evrecur_end").value;
+  var baseFields={
+    title:title,
+    event_time:document.getElementById("evtime").value,
+    event_time_end:document.getElementById("evtime_end").value,
+    description:document.getElementById("evdesc").value,
+    location:document.getElementById("evlocal").value,
+    color:document.getElementById("evcolor").value
+  };
+
+  if(editId){
+    // Edicao simples — sem recorrencia
+    var row=Object.assign({id:editId,user_id:currentUser.id,date:date},baseFields);
+    await db.from("events").upsert(row);
+    var idx=-1;
+    for(var i=0;i<events.length;i++){if(events[i].id===editId){idx=i;break}}
+    if(idx>=0)events[idx]=row;else events.push(row);
+  } else if(recur&&recurEnd){
+    // Gerar serie de eventos recorrentes
+    var dates=[date];
+    var cur=date;
+    var safety=0;
+    while(safety<366){
+      safety++;
+      if(recur==="daily")cur=addDays(cur,1);
+      else if(recur==="weekly")cur=addDays(cur,7);
+      else if(recur==="monthly")cur=addMonths(cur,1);
+      if(cur>recurEnd)break;
+      dates.push(cur);
+    }
+    var groupId="rec-"+Date.now();
+    var newRows=dates.map(function(d,i){
+      return Object.assign({id:groupId+"-"+i,user_id:currentUser.id,date:d,recur_group:groupId},baseFields);
+    });
+    await db.from("events").insert(newRows);
+    events=events.concat(newRows);
+  } else {
+    var id=""+Date.now();
+    var row=Object.assign({id:id,user_id:currentUser.id,date:date},baseFields);
+    await db.from("events").upsert(row);
+    events.push(row);
+  }
+
   closeM("m-event");renderCal();
   if(selDay===date)renderDayPanel(date);
   if(document.getElementById("page-inicio").classList.contains("active"))renderHomeWeek();
   toast("Evento salvo!","ok");
 }
 async function delEvent(id){
-  if(!confirm("Apagar este evento?"))return;
-  await db.from("events").delete().eq("id",id).eq("user_id",currentUser.id);
-  events=events.filter(function(e){return e.id!==id});
+  var ev=null;
+  for(var i=0;i<events.length;i++){if(events[i].id===id){ev=events[i];break}}
+  if(!ev)return;
+  if(ev.recur_group){
+    var delAll=confirm("Este evento faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so este evento");
+    if(delAll){
+      await db.from("events").delete().eq("recur_group",ev.recur_group).eq("user_id",currentUser.id);
+      events=events.filter(function(e){return e.recur_group!==ev.recur_group});
+    } else {
+      await db.from("events").delete().eq("id",id).eq("user_id",currentUser.id);
+      events=events.filter(function(e){return e.id!==id});
+    }
+  } else {
+    if(!confirm("Apagar este evento?"))return;
+    await db.from("events").delete().eq("id",id).eq("user_id",currentUser.id);
+    events=events.filter(function(e){return e.id!==id});
+  }
   renderCal();if(selDay)renderDayPanel(selDay);
   toast("Evento apagado.");
 }
