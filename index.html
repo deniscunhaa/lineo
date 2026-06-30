@@ -1,8 +1,16 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lineo">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2A9D7C">
 <title>Lineo</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='32' height='32' rx='7' fill='%232A9D7C'/%3E%3Cline x1='7' y1='16' x2='25' y2='16' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='7' y1='10' x2='16' y2='10' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='7' y1='22' x2='19' y2='22' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='25' cy='10' r='4' fill='%23E8935A'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAADa0lEQVR4nO3bzZGbQBSFUcVDSI7FWXjt/JzFeFxyza8uAtHNa8S5dfYDvG+pubwUbfr9k+VKbnTp/QfKP+tz63q7LnGUf7Jzan7HlnGUfx2uWh20TRzln4Pvtp91axzln4B5NXGUvzbL7RpH+duy1h5xlL8kW3SMo/zd2K5LHOVvRSuN4yh/H9pqFkf5m9BDgzjK34F+NsVR/vT09mAc5c/NPlbHUf7E7EkcRCviKH9W9rcojvKnpIo4iO7EUf581BIHUYyj/MkYgTiIbsRR/kyMQxxE4iD6FEf50zAacRCJg0gcRP/jKH8OxiQOInEQiYNIHETiIBIHkTiILuVPwLDEQSQOInEQiYNIHAfw59ePkr8rjhG91jBvn8cQx0DuNrFzJeIYxQNl9O5DHPUezqJ3IuIo1qSMTn2Io1LDMnr0IY4yzcto3oc4yoiD2zqV0bYPcRToWkbDPsRRQBxE4uC2Hcpo1UdZHC/PNXGII04c4ogThzjixCGOuNHKaNKHONps+YsfpQxxNJs4xBEnDnHEiYMGxMGcQ5QxiaOEOIjEwZzxy5jEUWjwMiZxFBIHc0YuYxJHuWHLmMQxgjHLmMQxjqGyuBLHQIYqYxLHmGqbeCOOA9ithi/EQSQOInEQiYPIzwSPMXFYnDgsThwWJw6LE4fFicPixGFx4rC4c8XB+MRBJA4icRCJg0gcROIgEgeROIjEQSQOInEQiYNIHETiIBIHkTiIxEHkZ4L7rfzY4hh35ccWx7grP7Y4xl35scUx7sqPLY5xV35scYy78mOLY9yVH1sc46782IeJg/GJg0gcROIgEgeROIjEQSQOInEQiYNIHETiIBIHkTiIxEEkDiJxEImDSBxElyP+tpF9iINIHETiIBIHkTiIxEEkDqLLQf+Nk95eqxAHt4mDSBxE73Hog4+uSYiDG8RB9DUOfXD11oM4+Op2HPrgYwzi4JO5OPRxZl9KEAfv7sehj3P6nsHtOPRxNjcbEAf/rItDH+eRApiLQx9nMHP9O3Ho47nNn/5+HPp4VnfvvigOfTyfJUdfGoc+nsnCi6+IQx/PYfm518Whj6NbdevVcUjkoB648oNx6ONYHjvx43FI5BC2HHdrHBIZ1vaztonjuvLPwVWrg7aM423lX+ecmt+xSxwfV/7JnlvX2/0Fsct/0XxW0SUAAAAASUVORK5CYII=">
@@ -599,9 +607,10 @@ async function doSignup(){
   toast("Conta criada! Bem-vindo(a)!","ok");
 }
 async function doGoogleLogin(){
+  var cleanUrl=window.location.origin+window.location.pathname;
   var {error}=await db.auth.signInWithOAuth({
     provider:"google",
-    options:{redirectTo:window.location.href}
+    options:{redirectTo:cleanUrl}
   });
   if(error){toast("Erro ao entrar com Google: "+error.message,"warn")}
 }
