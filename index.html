@@ -753,29 +753,21 @@ function renderHomeToday(){
   if(!el)return;
   var today=todayStr();
   var hasEntry=entries.some(function(e){return e.date===today});
-  var pendingCount=tasks.filter(function(t){return !t.done}).length;
-  var dueTodayCount=tasks.filter(function(t){return !t.done&&t.due===today}).length;
-  var nextEv=events.filter(function(e){return e.date===today}).sort(function(a,b){return(a.event_time||"").localeCompare(b.event_time||"")})[0];
   var streak=calcStreak();
-  var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">';
+  var html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">';
 
-  html+='<div class="card" style="padding:16px;cursor:pointer" onclick="goTab(\'diario\',document.querySelectorAll(\'.tab\')[1])">'+
-    '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Diario de hoje</div>'+
+  html+='<div class="card" style="padding:18px 20px;cursor:pointer;display:flex;align-items:center;gap:14px" onclick="goTab(\'diario\',document.querySelectorAll(\'.tab\')[1])">'+
+    '<div style="width:40px;height:40px;border-radius:50%;background:'+(hasEntry?"var(--al)":"var(--s2)")+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+
+    (hasEntry?"&#10003;":"&#9999;")+'</div>'+
+    '<div><div style="font-size:12px;color:var(--t3);margin-bottom:2px">Diario de hoje</div>'+
     '<div style="font-size:15px;font-weight:600;color:'+(hasEntry?"var(--accent)":"var(--text)")+'">'+
-    (hasEntry?"&#10003; Registrado":"Ainda nao escrito")+'</div></div>';
+    (hasEntry?"Registrado":"Escrever agora")+'</div></div></div>';
 
-  html+='<div class="card" style="padding:16px;cursor:pointer" onclick="goTab(\'diario\',document.querySelectorAll(\'.tab\')[1])">'+
-    '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Sequencia de dias</div>'+
+  html+='<div class="card" style="padding:18px 20px;cursor:pointer;display:flex;align-items:center;gap:14px" onclick="goTab(\'diario\',document.querySelectorAll(\'.tab\')[1])">'+
+    '<div style="width:40px;height:40px;border-radius:50%;background:'+(streak>0?"var(--warnl)":"var(--s2)")+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">&#128293;</div>'+
+    '<div><div style="font-size:12px;color:var(--t3);margin-bottom:2px">Sequencia de dias</div>'+
     '<div style="font-size:15px;font-weight:600;color:'+(streak>0?"var(--warn)":"var(--text)")+'">'+
-    (streak>0?'&#128293; '+streak+(streak===1?' dia':' dias'):'Comece hoje')+'</div></div>';
-
-  html+='<div class="card" style="padding:16px;cursor:pointer" onclick="goTab(\'tarefas\',document.querySelectorAll(\'.tab\')[2])">'+
-    '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Tarefas pendentes</div>'+
-    '<div style="font-size:15px;font-weight:600">'+pendingCount+(dueTodayCount?' <span style="font-size:12px;font-weight:500;color:var(--warn)">('+dueTodayCount+' para hoje)</span>':'')+'</div></div>';
-
-  html+='<div class="card" style="padding:16px;cursor:pointer" onclick="goTab(\'calendario\',document.querySelectorAll(\'.tab\')[4])">'+
-    '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Proximo compromisso</div>'+
-    '<div style="font-size:15px;font-weight:600">'+(nextEv?nextEv.title+(nextEv.event_time?' &middot; '+nextEv.event_time:''):'Nada hoje')+'</div></div>';
+    (streak>0?streak+(streak===1?' dia seguido':' dias seguidos'):'Comece hoje')+'</div></div></div>';
 
   html+="</div>";
   el.innerHTML=html;
