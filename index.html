@@ -550,6 +550,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <select class="inp sel" id="trecur" onchange="toggleTaskRecurEnd()" style="width:100%">
         <option value="">Nao se repete</option>
         <option value="daily">Diariamente</option>
+        <option value="weekdays">Dias uteis (Seg-Sex)</option>
         <option value="weekly">Semanalmente</option>
         <option value="monthly">Mensalmente</option>
       </select>
@@ -580,6 +581,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <select class="inp sel" id="evrecur" onchange="toggleRecurEnd()" style="width:100%">
         <option value="">Nao se repete</option>
         <option value="daily">Diariamente</option>
+        <option value="weekdays">Dias uteis (Seg-Sex)</option>
         <option value="weekly">Semanalmente</option>
         <option value="monthly">Mensalmente</option>
       </select>
@@ -612,8 +614,21 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="mhdr"><div class="mtitle">Novo lembrete</div><div class="mclose" onclick="closeM('m-rem')">&#10005;</div></div>
     <div class="fg"><label class="lbl">Mensagem</label><input class="inp" id="rlbl" placeholder="Que lembrete e esse?"><div class="errmsg" id="e-rlbl"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="fg"><label class="lbl">Data</label><input class="inp" type="date" id="rdate"><div class="errmsg" id="e-rdate"></div></div>
-      <div class="fg"><label class="lbl">Horario</label><input class="inp" type="time" id="rtime"><div class="errmsg" id="e-rtime"></div></div>
+      <div class="fg"><label class="lbl">Data</label><input class="inp" type="date" id="rdate" style="width:100%;min-width:0;box-sizing:border-box"><div class="errmsg" id="e-rdate"></div></div>
+      <div class="fg"><label class="lbl">Horario</label><input class="inp" type="time" id="rtime" style="width:100%;min-width:0;box-sizing:border-box"><div class="errmsg" id="e-rtime"></div></div>
+    </div>
+    <div class="fg"><label class="lbl">Recorrencia</label>
+      <select class="inp sel" id="rrecur" onchange="toggleRemRecurEnd()" style="width:100%">
+        <option value="">Nao se repete</option>
+        <option value="daily">Diariamente</option>
+        <option value="weekdays">Dias uteis (Seg-Sex)</option>
+        <option value="weekly">Semanalmente</option>
+        <option value="monthly">Mensalmente</option>
+      </select>
+    </div>
+    <div class="fg" id="rrecur-end-wrap" style="display:none">
+      <label class="lbl">Repetir ate</label>
+      <input class="inp" type="date" id="rrecur_end" style="width:100%;min-width:0;box-sizing:border-box">
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
       <button class="btn btn-s" onclick="closeM('m-rem')">Cancelar</button>
@@ -1791,6 +1806,7 @@ async function saveTask(){
     while(safety<366){
       safety++;
       if(recur==="daily")cur=addDays(cur,1);
+      else if(recur==="weekdays")cur=nextWeekday(cur);
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
       if(cur>recurEnd)break;
@@ -1960,8 +1976,11 @@ function renderDayNotes(ds){
   var html="";
   for(var i=0;i<notes.length;i++){
     var n=notes[i];
+    // Usar plain_text se disponível, senão limpar HTML do content
+    var plain=n.plain_text||n.content||"";
+    if(plain.indexOf("<")>=0)plain=plain.replace(/<br\s*\/?>/gi,"\n").replace(/<div>/gi,"\n").replace(/<\/div>/gi,"").replace(/<[^>]+>/g,"").trim();
     html+='<div class="dnitem"><div class="dntimestamp">'+n.ts+"</div>"+
-      '<div class="dntext">'+esc(n.content)+"</div>"+
+      '<div class="dntext">'+esc(plain)+"</div>"+
       '<button class="ibtn red" style="position:absolute;top:8px;right:8px" data-ds="'+ds+'" data-nid="'+n.id+'" onclick="delDayNote(this.getAttribute(\'data-ds\'),this.getAttribute(\'data-nid\'))">&#128465;</button></div>';
   }
   el.innerHTML=html;
@@ -2098,6 +2117,12 @@ function addMonths(dateStr,n){
   d.setMonth(d.getMonth()+n);
   return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 }
+function nextWeekday(dateStr){
+  // Avança para o próximo dia útil (Seg-Sex)
+  var d=new Date(dateStr+"T12:00:00");
+  do{d.setDate(d.getDate()+1)}while(d.getDay()===0||d.getDay()===6);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
 async function saveEvent(){
   var title=document.getElementById("evtitle").value.trim();
   var date=document.getElementById("evdate").value;
@@ -2131,6 +2156,7 @@ async function saveEvent(){
     while(safety<366){
       safety++;
       if(recur==="daily")cur=addDays(cur,1);
+      else if(recur==="weekdays")cur=nextWeekday(cur);
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
       if(cur>recurEnd)break;
@@ -2182,23 +2208,51 @@ function openReminderModal(ds){
   document.getElementById("rlbl").value="";
   document.getElementById("rdate").value=ds||todayStr();
   document.getElementById("rtime").value="";
+  document.getElementById("rrecur").value="";
+  document.getElementById("rrecur_end").value="";
+  document.getElementById("rrecur-end-wrap").style.display="none";
   clrErr(["rlbl","rdate","rtime"]);openM("m-rem");
+}
+function toggleRemRecurEnd(){
+  var v=document.getElementById("rrecur").value;
+  document.getElementById("rrecur-end-wrap").style.display=v?"block":"none";
 }
 async function saveReminder(){
   var lbl=document.getElementById("rlbl").value.trim();
   var date=document.getElementById("rdate").value;
   var time=document.getElementById("rtime").value;
+  var recur=document.getElementById("rrecur").value;
+  var recurEnd=document.getElementById("rrecur_end").value;
   clrErr(["rlbl","rdate","rtime"]);
   if(!lbl){setErr("rlbl","Escreva uma mensagem.");return}
   if(!date){setErr("rdate","Escolha uma data.");return}
   if(!time){setErr("rtime","Escolha um horario.");return}
-  var row={id:""+Date.now(),user_id:currentUser.id,label:lbl,date:date,reminder_time:time,fired:false};
-  await db.from("reminders").insert(row);
-  reminders.push(row);
+  if(recur&&recurEnd){
+    // Gerar série de lembretes
+    var dates=[date];
+    var cur=date;
+    var safety=0;
+    while(safety<366){
+      safety++;
+      if(recur==="daily")cur=addDays(cur,1);
+      else if(recur==="weekdays")cur=nextWeekday(cur);
+      else if(recur==="weekly")cur=addDays(cur,7);
+      else if(recur==="monthly")cur=addMonths(cur,1);
+      if(cur>recurEnd)break;
+      dates.push(cur);
+    }
+    var groupId="rrec-"+Date.now();
+    var newRows=dates.map(function(d,i){
+      return{id:groupId+"-"+i,user_id:currentUser.id,label:lbl,date:d,reminder_time:time,fired:false,recur_group:groupId};
+    });
+    await db.from("reminders").insert(newRows);
+    reminders=reminders.concat(newRows);
+  } else {
+    var row={id:""+Date.now(),user_id:currentUser.id,label:lbl,date:date,reminder_time:time,fired:false};
+    await db.from("reminders").insert(row);
+    reminders.push(row);
+  }
   closeM("m-rem");renderReminders();scheduleNotifications();
-  document.getElementById("rlbl").value="";
-  document.getElementById("rdate").value="";
-  document.getElementById("rtime").value="";
   toast("Lembrete salvo!","ok");
 }
 async function delReminder(id){
