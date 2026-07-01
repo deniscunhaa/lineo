@@ -951,26 +951,27 @@ function renderProductivity(){
   el.innerHTML=html;
 }
 // ===== NOTIFICATIONS =====
-var notifTimers=[];
 var swRegistration=null;
+var notifFired={}; // chave = id+tipo, evita duplicar
+var notifPollInterval=null;
 
 async function initNotifications(){
-  if(!("Notification" in window)||!("serviceWorker" in navigator))return;
+  if(!("Notification" in window))return;
   // Registrar service worker
-  try{
-    swRegistration=await navigator.serviceWorker.register("/sw.js");
-  }catch(e){console.warn("[Lineo] SW nao registrado:",e);}
-  // Pedir permissão na primeira vez
+  if("serviceWorker" in navigator){
+    try{swRegistration=await navigator.serviceWorker.register("/sw.js");}
+    catch(e){console.warn("[Lineo] SW:",e);}
+  }
   if(Notification.permission==="default"){
     var btn=document.createElement("div");
     btn.id="notif-banner";
-    btn.style.cssText="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2C2C28;color:#fff;padding:14px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:90vw";
-    btn.innerHTML='<span>&#128276;</span><span>Ativar notificacoes para lembretes e eventos?</span>'+
-      '<button onclick="requestNotifPermission()" style="background:#2A9D7C;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Ativar</button>'+
-      '<button onclick="this.parentElement.remove()" style="background:transparent;color:#aaa;border:none;font-size:18px;cursor:pointer;line-height:1">&#10005;</button>';
+    btn.style.cssText="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2C2C28;color:#fff;padding:14px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:calc(100vw - 40px)";
+    btn.innerHTML='<span>&#128276;</span><span>Ativar notificacoes de lembretes e eventos?</span>'+
+      '<button onclick="requestNotifPermission()" style="background:#2A9D7C;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Ativar</button>'+
+      '<button onclick="this.parentElement.remove()" style="background:transparent;color:#aaa;border:none;font-size:20px;cursor:pointer;line-height:1;padding:0 4px">&#10005;</button>';
     document.body.appendChild(btn);
   } else if(Notification.permission==="granted"){
-    scheduleNotifications();
+    startNotifPolling();
   }
 }
 async function requestNotifPermission(){
@@ -979,36 +980,56 @@ async function requestNotifPermission(){
   var perm=await Notification.requestPermission();
   if(perm==="granted"){
     toast("Notificacoes ativadas!","ok");
-    scheduleNotifications();
+    // Teste imediato para confirmar que funciona
+    setTimeout(function(){
+      fireNotif("Lineo","Notificacoes ativadas com sucesso!");
+    },1000);
+    startNotifPolling();
+  } else {
+    toast("Permissao negada — ative nas configuracoes do navegador","warn");
   }
 }
+function startNotifPolling(){
+  if(notifPollInterval)clearInterval(notifPollInterval);
+  checkNotifications(); // checar imediatamente
+  notifPollInterval=setInterval(checkNotifications,60000); // checar a cada 1 minuto
+}
 function scheduleNotifications(){
+  // Reinicia o polling com dados atualizados
+  if(Notification.permission==="granted")startNotifPolling();
+}
+function checkNotifications(){
   if(Notification.permission!=="granted")return;
-  // Cancelar timers anteriores
-  notifTimers.forEach(function(t){clearTimeout(t)});
-  notifTimers=[];
-  var now=Date.now();
-  var BEFORE=15*60*1000; // 15 minutos antes em ms
+  var now=new Date();
+  var nowMs=now.getTime();
+  var BEFORE=15*60*1000;
+  var WINDOW=90*1000; // janela de 90s para não perder notificações
 
-  function schedule(title,body,fireAt){
-    var delay=fireAt-now;
-    if(delay<0||delay>48*60*60*1000)return; // só próximas 48h
-    var t=setTimeout(function(){
-      fireNotif(title,body);
-    },delay);
-    notifTimers.push(t);
-  }
   function toMs(dateStr,timeStr){
     if(!dateStr||!timeStr)return null;
     return new Date(dateStr+"T"+timeStr+":00").getTime();
+  }
+  function shouldFire(ms,key){
+    if(!ms)return false;
+    if(notifFired[key])return false;
+    var diff=ms-nowMs;
+    // Dispara se o horário alvo está dentro da janela de ±90s
+    return Math.abs(diff)<=WINDOW;
+  }
+  function fire(title,body,key){
+    if(notifFired[key])return;
+    notifFired[key]=true;
+    fireNotif(title,body);
   }
 
   // Eventos
   events.forEach(function(ev){
     var ms=toMs(ev.date,ev.event_time);
     if(!ms)return;
-    schedule("&#128197; "+ev.title,"Evento em 15 minutos"+(ev.location?" — "+ev.location:""),ms-BEFORE);
-    schedule("&#128197; "+ev.title,"Comecando agora"+(ev.location?" — "+ev.location:""),ms);
+    if(shouldFire(ms-BEFORE,"ev15_"+ev.id))
+      fire("Evento em 15 min: "+ev.title,(ev.location||""),"ev15_"+ev.id);
+    if(shouldFire(ms,"ev_"+ev.id))
+      fire("Comecando agora: "+ev.title,(ev.location||""),"ev_"+ev.id);
   });
 
   // Tarefas com horário
@@ -1016,8 +1037,10 @@ function scheduleNotifications(){
     if(t.done)return;
     var ms=toMs(t.due,t.task_time);
     if(!ms)return;
-    schedule("&#9989; "+t.text,"Tarefa em 15 minutos",ms-BEFORE);
-    schedule("&#9989; "+t.text,"Hora da tarefa!",ms);
+    if(shouldFire(ms-BEFORE,"tk15_"+t.id))
+      fire("Tarefa em 15 min: "+t.text,"","tk15_"+t.id);
+    if(shouldFire(ms,"tk_"+t.id))
+      fire("Hora da tarefa: "+t.text,"","tk_"+t.id);
   });
 
   // Lembretes
@@ -1025,19 +1048,26 @@ function scheduleNotifications(){
     if(r.fired)return;
     var ms=toMs(r.date,r.reminder_time);
     if(!ms)return;
-    schedule("&#128276; Lembrete",r.label,ms-BEFORE);
-    schedule("&#128276; "+r.label,"Agora!",ms);
+    if(shouldFire(ms-BEFORE,"rm15_"+r.id))
+      fire("Lembrete em 15 min",r.label,"rm15_"+r.id);
+    if(shouldFire(ms,"rm_"+r.id))
+      fire("Lembrete: "+r.label,"Agora!","rm_"+r.id);
   });
 }
 function fireNotif(title,body){
   if(Notification.permission!=="granted")return;
   try{
     if(swRegistration&&swRegistration.showNotification){
-      swRegistration.showNotification("Lineo — "+title,{body:body,icon:"/icon-192.png",badge:"/icon-192.png",vibrate:[200,100,200]});
+      swRegistration.showNotification(title,{
+        body:body,
+        icon:"data:image/svg+xml,%3Csvg width='192' height='192' viewBox='0 0 192 192' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='192' height='192' rx='48' fill='%232A9D7C'/%3E%3Cline x1='48' y1='96' x2='144' y2='96' stroke='white' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='48' y1='64' x2='100' y2='64' stroke='white' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='48' y1='128' x2='116' y2='128' stroke='white' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='144' cy='64' r='24' fill='%23E8935A'/%3E%3C/svg%3E",
+        vibrate:[200,100,200],
+        requireInteraction:false
+      });
     } else {
-      new Notification("Lineo — "+title,{body:body});
+      new Notification(title,{body:body});
     }
-  }catch(e){console.warn("[Lineo] notif erro:",e);}
+  }catch(e){console.warn("[Lineo] notif:",e);}
 }
 
 function goToTasksFiltered(filter){
@@ -1812,11 +1842,12 @@ async function saveTask(){
       if(cur>recurEnd)break;
       dates.push(cur);
     }
-    var groupId="trec-"+Date.now();
+    var groupId="trec"+Date.now();
     var newRows=dates.map(function(d,i){
-      return Object.assign({id:groupId+"-"+i,due:d,recur_group:groupId},baseFields);
+      return Object.assign({id:groupId+"x"+i,due:d,recur_group:groupId},baseFields);
     });
-    await db.from("tasks").insert(newRows);
+    var rres2=await db.from("tasks").insert(newRows);
+    if(rres2.error){toast("Erro ao salvar serie: "+rres2.error.message,"warn");showLoading(false);return;}
     tasks=newRows.concat(tasks);
   } else {
     var id=""+Date.now();
@@ -2162,11 +2193,12 @@ async function saveEvent(){
       if(cur>recurEnd)break;
       dates.push(cur);
     }
-    var groupId="rec-"+Date.now();
+    var groupId="rec"+Date.now();
     var newRows=dates.map(function(d,i){
-      return Object.assign({id:groupId+"-"+i,user_id:currentUser.id,date:d,recur_group:groupId},baseFields);
+      return Object.assign({id:groupId+"x"+i,user_id:currentUser.id,date:d,recur_group:groupId},baseFields);
     });
-    await db.from("events").insert(newRows);
+    var rres=await db.from("events").insert(newRows);
+    if(rres.error){toast("Erro ao salvar serie: "+rres.error.message,"warn");showLoading(false);return;}
     events=events.concat(newRows);
   } else {
     var id=""+Date.now();
