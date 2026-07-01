@@ -540,7 +540,12 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="fg"><label class="lbl">Prioridade</label>
       <select class="inp sel" id="tprio"><option>Alta</option><option selected>Media</option><option>Baixa</option></select>
     </div>
-    <div class="fg"><label class="lbl">Data limite (opcional)</label><input class="inp" type="date" id="tdue" style="width:100%;min-width:0;box-sizing:border-box"></div>
+    <div class="fg"><label class="lbl">Data limite (opcional)</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <input class="inp" type="date" id="tdue" style="width:100%;min-width:0;box-sizing:border-box">
+        <input class="inp" type="time" id="ttime" style="width:100%;min-width:0;box-sizing:border-box" placeholder="Horario">
+      </div>
+    </div>
     <div class="fg"><label class="lbl">Recorrencia</label>
       <select class="inp sel" id="trecur" onchange="toggleTaskRecurEnd()" style="width:100%">
         <option value="">Nao se repete</option>
@@ -657,6 +662,7 @@ function showApp(){
   document.getElementById("app-screen").style.display="block";
   var meta=currentUser.user_metadata||{};
   document.getElementById("user-email-lbl").textContent=meta.full_name||currentUser.email;
+  initNotifications();
 }
 function showAuth(){
   showLoading(false);
@@ -744,6 +750,7 @@ async function loadAllData(){
   showLoading(false);
   renderHome();renderStats();renderCal();renderReminders();
   loadScratchHistory();
+  scheduleNotifications();
   console.log("[Lineo] loadAllData concluido");
 }
 
@@ -891,12 +898,12 @@ function renderProductivity(){
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">'+
     '<div style="font-size:15px;font-weight:600;font-family:Lora,serif">Produtividade desta semana</div>'+
     '<button class="btn btn-g sm" onclick="goTab(\'tarefas\',document.querySelectorAll(\'.tab\')[2])">Ver tarefas &#8594;</button></div>'+
-    // Métricas
+    // Métricas clicáveis
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:20px">'+
-    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--accent)">'+weekDone+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Concluidas</div></div>'+
-    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--warn)">'+pending+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Pendentes</div></div>'+
-    (overdue?'<div style="background:var(--errl);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--err)">'+overdue+'</div><div style="font-size:11px;color:var(--err);margin-top:2px">Atrasadas</div></div>':'')+
-    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:'+(rate>=70?"var(--ok)":rate>=40?"var(--warn)":"var(--err)")+'">'+rate+'%</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Conclusao</div></div>'+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:.15s" onclick="goToTasksFiltered(\'done\')" onmouseover="this.style.background=\'var(--al)\'" onmouseout="this.style.background=\'var(--s2)\'"><div style="font-size:22px;font-weight:600;color:var(--accent)">'+weekDone+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Concluidas</div></div>'+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:.15s" onclick="goToTasksFiltered(\'pending\')" onmouseover="this.style.background=\'var(--al)\'" onmouseout="this.style.background=\'var(--s2)\'"><div style="font-size:22px;font-weight:600;color:var(--warn)">'+pending+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Pendentes</div></div>'+
+    (overdue?'<div style="background:var(--errl);border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:.15s" onclick="goToTasksFiltered(\'overdue\')" onmouseover="this.style.background=\'#FBCECE\'" onmouseout="this.style.background=\'var(--errl)\'"><div style="font-size:22px;font-weight:600;color:var(--err)">'+overdue+'</div><div style="font-size:11px;color:var(--err);margin-top:2px">Atrasadas</div></div>':'')+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:.15s" onclick="goToTasksFiltered(\'all\')" onmouseover="this.style.background=\'var(--al)\'" onmouseout="this.style.background=\'var(--s2)\'"><div style="font-size:22px;font-weight:600;color:'+(rate>=70?"var(--ok)":rate>=40?"var(--warn)":"var(--err)")+'">'+rate+'%</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Conclusao</div></div>'+
     '</div>'+
     // Barras por categoria
     (catKeys.length?'<div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Por categoria</div>'+
@@ -927,6 +934,108 @@ function renderProductivity(){
     '</div></div>';
 
   el.innerHTML=html;
+}
+// ===== NOTIFICATIONS =====
+var notifTimers=[];
+var swRegistration=null;
+
+async function initNotifications(){
+  if(!("Notification" in window)||!("serviceWorker" in navigator))return;
+  // Registrar service worker
+  try{
+    swRegistration=await navigator.serviceWorker.register("/sw.js");
+  }catch(e){console.warn("[Lineo] SW nao registrado:",e);}
+  // Pedir permissão na primeira vez
+  if(Notification.permission==="default"){
+    var btn=document.createElement("div");
+    btn.id="notif-banner";
+    btn.style.cssText="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2C2C28;color:#fff;padding:14px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:90vw";
+    btn.innerHTML='<span>&#128276;</span><span>Ativar notificacoes para lembretes e eventos?</span>'+
+      '<button onclick="requestNotifPermission()" style="background:#2A9D7C;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Ativar</button>'+
+      '<button onclick="this.parentElement.remove()" style="background:transparent;color:#aaa;border:none;font-size:18px;cursor:pointer;line-height:1">&#10005;</button>';
+    document.body.appendChild(btn);
+  } else if(Notification.permission==="granted"){
+    scheduleNotifications();
+  }
+}
+async function requestNotifPermission(){
+  var banner=document.getElementById("notif-banner");
+  if(banner)banner.remove();
+  var perm=await Notification.requestPermission();
+  if(perm==="granted"){
+    toast("Notificacoes ativadas!","ok");
+    scheduleNotifications();
+  }
+}
+function scheduleNotifications(){
+  if(Notification.permission!=="granted")return;
+  // Cancelar timers anteriores
+  notifTimers.forEach(function(t){clearTimeout(t)});
+  notifTimers=[];
+  var now=Date.now();
+  var BEFORE=15*60*1000; // 15 minutos antes em ms
+
+  function schedule(title,body,fireAt){
+    var delay=fireAt-now;
+    if(delay<0||delay>48*60*60*1000)return; // só próximas 48h
+    var t=setTimeout(function(){
+      fireNotif(title,body);
+    },delay);
+    notifTimers.push(t);
+  }
+  function toMs(dateStr,timeStr){
+    if(!dateStr||!timeStr)return null;
+    return new Date(dateStr+"T"+timeStr+":00").getTime();
+  }
+
+  // Eventos
+  events.forEach(function(ev){
+    var ms=toMs(ev.date,ev.event_time);
+    if(!ms)return;
+    schedule("&#128197; "+ev.title,"Evento em 15 minutos"+(ev.location?" — "+ev.location:""),ms-BEFORE);
+  });
+
+  // Tarefas com horário
+  tasks.forEach(function(t){
+    if(t.done)return;
+    var ms=toMs(t.due,t.task_time);
+    if(!ms)return;
+    schedule("&#9989; "+t.text,"Tarefa em 15 minutos",ms-BEFORE);
+  });
+
+  // Lembretes
+  reminders.forEach(function(r){
+    if(r.fired)return;
+    var ms=toMs(r.date,r.reminder_time);
+    if(!ms)return;
+    schedule("&#128276; Lembrete",r.label,ms-BEFORE);
+  });
+}
+function fireNotif(title,body){
+  if(Notification.permission!=="granted")return;
+  try{
+    if(swRegistration&&swRegistration.showNotification){
+      swRegistration.showNotification("Lineo — "+title,{body:body,icon:"/icon-192.png",badge:"/icon-192.png",vibrate:[200,100,200]});
+    } else {
+      new Notification("Lineo — "+title,{body:body});
+    }
+  }catch(e){console.warn("[Lineo] notif erro:",e);}
+}
+
+function goToTasksFiltered(filter){
+  goTab("tarefas",document.querySelectorAll(".tab")[2]);
+  var statusEl=document.getElementById("tf-status");
+  if(!statusEl)return;
+  if(filter==="done")statusEl.value="done";
+  else if(filter==="pending")statusEl.value="pending";
+  else if(filter==="overdue"){statusEl.value="pending";}
+  else statusEl.value="";
+  // Para atrasadas, também limpa filtro de categoria/prioridade
+  if(filter==="overdue"){
+    document.getElementById("tf-cat").value="";
+    document.getElementById("tf-prio").value="";
+  }
+  renderTasks();
 }
 function calcStreak(){
   if(!entries.length)return 0;
@@ -1633,6 +1742,7 @@ function openNewTask(ds){
   document.getElementById("tcat").value="Pessoal";
   document.getElementById("tprio").value="Media";
   document.getElementById("tdue").value=ds||"";
+  document.getElementById("ttime").value="";
   document.getElementById("tnotes").value="";
   document.getElementById("trecur").value="";
   document.getElementById("trecur_end").value="";
@@ -1656,6 +1766,7 @@ async function saveTask(){
     category:document.getElementById("tcat").value,
     priority:document.getElementById("tprio").value,
     due:document.getElementById("tdue").value,
+    task_time:document.getElementById("ttime").value,
     notes:document.getElementById("tnotes").value,
     done:false,created_at:Date.now()
   };
@@ -1698,6 +1809,7 @@ async function saveTask(){
   closeM("m-task");renderTasks();renderStats();
   if(document.getElementById("page-inicio").classList.contains("active"))renderHomeTasks();
   if(document.getElementById("page-calendario").classList.contains("active"))renderCal();
+  scheduleNotifications();
   toast("Tarefa salva!","ok");
 }
 function editTask(id){
@@ -1709,6 +1821,7 @@ function editTask(id){
   document.getElementById("tcat").value=t.category||"Pessoal";
   document.getElementById("tprio").value=t.priority||"Media";
   document.getElementById("tdue").value=t.due||"";
+  document.getElementById("ttime").value=t.task_time||"";
   document.getElementById("tnotes").value=t.notes||"";
   document.getElementById("trecur").value="";
   document.getElementById("trecur_end").value="";
@@ -2036,6 +2149,7 @@ async function saveEvent(){
   closeM("m-event");renderCal();
   if(selDay===date)renderDayPanel(date);
   if(document.getElementById("page-inicio").classList.contains("active"))renderHomeWeek();
+  scheduleNotifications();
   toast("Evento salvo!","ok");
 }
 async function delEvent(id){
@@ -2078,7 +2192,7 @@ async function saveReminder(){
   var row={id:""+Date.now(),user_id:currentUser.id,label:lbl,date:date,reminder_time:time,fired:false};
   await db.from("reminders").insert(row);
   reminders.push(row);
-  closeM("m-rem");renderReminders();
+  closeM("m-rem");renderReminders();scheduleNotifications();
   document.getElementById("rlbl").value="";
   document.getElementById("rdate").value="";
   document.getElementById("rtime").value="";
