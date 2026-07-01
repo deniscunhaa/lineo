@@ -122,6 +122,28 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
 .fmtbar{display:flex;gap:4px;padding:8px;background:var(--s2);border-radius:var(--r);margin-bottom:8px;flex-wrap:wrap;align-items:center}
 .fmtbtn{padding:5px 10px;border-radius:6px;border:1px solid transparent;font-size:13px;cursor:pointer;transition:.2s;background:none;font-family:"Inter",sans-serif;color:var(--text)}
+/* ── Notes layout ── */
+.notes-layout{display:grid;grid-template-columns:260px 1fr;gap:0;border:0.5px solid var(--border);border-radius:var(--rl);overflow:hidden;min-height:600px;background:var(--surface)}
+.notes-sidebar{border-right:0.5px solid var(--border);background:var(--s2);display:flex;flex-direction:column;overflow:hidden}
+.notes-search-wrap{padding:10px 12px;border-bottom:0.5px solid var(--border)}
+#notes-list{flex:1;overflow-y:auto}
+.note-item{padding:12px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:.15s}
+.note-item:hover{background:var(--al)}
+.note-item.active{background:var(--al);border-left:3px solid var(--accent)}
+.note-item-title{font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note-item-meta{font-size:11px;color:var(--t3);margin-top:3px}
+.note-item-preview{font-size:12px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note-pin-badge{font-size:10px;margin-right:4px}
+.notes-period-lbl{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px 4px;background:var(--s2)}
+.notes-editor-wrap{display:flex;flex-direction:column;overflow:hidden}
+.notes-editor-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t3);text-align:center;padding:40px}
+.notes-editor-topbar{border-bottom:0.5px solid var(--border);padding:10px 16px 0}
+.note-title-inp{border:none;outline:none;font-size:20px;font-weight:600;color:var(--text);padding:14px 16px 6px;font-family:"Lora",serif;background:transparent;width:100%}
+.notes-txt{border:none;border-radius:0;padding:12px 16px;min-height:360px;resize:none;flex:1;font-size:14px;line-height:1.8}
+#notes-editor{display:none}
+#notes-editor.visible{display:flex;flex-direction:column}
+#notes-empty.hidden{display:none}
+@media(max-width:640px){.notes-layout{grid-template-columns:1fr;min-height:auto}.notes-sidebar{border-right:none;border-bottom:0.5px solid var(--border);max-height:280px}.notes-txt{min-height:240px}}
 .fmtbtn:hover{background:var(--border)}
 .fsep{width:1px;height:20px;background:var(--b2);margin:0 4px}
 .fsc{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2)}
@@ -248,7 +270,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
   <div class="tabs">
     <div class="tab active" onclick="goTab('inicio',this)">Inicio</div>
     <div class="tab" onclick="goTab('diario',this)">Diario</div>
-    <div class="tab" onclick="goTab('notas',this)">Rascunho</div>
+    <div class="tab" onclick="goTab('notas',this)">Notas</div>
     <div class="tab" onclick="goTab('tarefas',this)">Tarefas</div>
     <div class="tab" onclick="goTab('calendario',this)">Calendario</div>
     <div class="tab" onclick="goTab('lembretes',this)">Lembretes</div>
@@ -272,6 +294,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         <div id="home-events" style="margin-top:16px"></div>
         <div id="home-tasks" style="margin-top:16px"></div>
       </div>
+      <div id="home-productivity" style="margin-bottom:20px"></div>
     </div>
 
     <div id="page-diario" class="page">
@@ -284,29 +307,44 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 
     <div id="page-notas" class="page">
       <div class="sechdr">
-        <div><div class="sectitle">Rascunho livre</div><div class="secsub">Escreva, salve e comece outro</div></div>
-        <button class="btn btn-p" onclick="saveNotes()">Salvar rascunho</button>
+        <div><div class="sectitle">Notas</div><div class="secsub">Suas ideias, sempre salvas</div></div>
+        <button class="btn btn-p" onclick="newNote()">+ Nova nota</button>
       </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="fmtbar">
-          <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('bold')"><b>N</b></button>
-          <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('italic')"><i>I</i></button>
-          <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('underline')"><u>S</u></button>
-          <div class="fsep"></div>
-          <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('insertUnorderedList')">Lista</button>
-          <div class="fsep"></div>
-          <div class="fsc"><span>Fonte</span><input type="number" value="15" min="10" max="32" onchange="document.getElementById('ned').style.fontSize=this.value+'px'" style="width:52px"><span>px</span></div>
+      <div class="notes-layout">
+        <div class="notes-sidebar" id="notes-sidebar">
+          <div class="notes-search-wrap">
+            <input class="inp" id="notes-search" placeholder="&#128269; Buscar notas..." oninput="filterNotes()" style="font-size:13px;padding:8px 12px">
+          </div>
+          <div id="notes-list"></div>
         </div>
-        <div id="ned" contenteditable="true" class="txtarea" style="min-height:240px;outline:none" data-ph="Escreva aqui seu rascunho..."></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px;flex-wrap:wrap">
-          <span id="nsaved" style="font-size:12px;color:var(--t3)"></span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-s sm" onclick="clearNotes()">Descartar</button>
-            <button class="btn btn-p sm" onclick="saveNotes()">Salvar rascunho</button>
+        <div class="notes-editor-wrap" id="notes-editor-wrap">
+          <div class="notes-editor-empty" id="notes-empty">
+            <div style="font-size:32px;margin-bottom:12px">&#128221;</div>
+            <div style="font-size:16px;font-weight:500;color:var(--text);margin-bottom:6px">Nenhuma nota selecionada</div>
+            <div style="font-size:13px;color:var(--t3)">Selecione uma nota ou crie uma nova</div>
+          </div>
+          <div id="notes-editor" style="display:none;height:100%;display:none;flex-direction:column">
+            <div class="notes-editor-topbar">
+              <div class="fmtbar" style="border-bottom:none;padding:0">
+                <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('bold')"><b>N</b></button>
+                <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('italic')"><i>I</i></button>
+                <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('underline')"><u>S</u></button>
+                <div class="fsep"></div>
+                <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('insertUnorderedList')">&#8226; Lista</button>
+                <div class="fsep"></div>
+                <button class="fmtbtn" id="note-pin-btn" onclick="toggleNotePin()" title="Fixar nota">&#128204;</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;padding:0 16px 10px">
+                <span id="nsaved" style="font-size:11px;color:var(--t3);flex:1"></span>
+                <button class="btn btn-d sm" onclick="deleteCurrentNote()">&#128465; Excluir</button>
+                <button class="btn btn-p sm" onclick="saveNotes()">Salvar</button>
+              </div>
+            </div>
+            <input id="note-title-input" class="note-title-inp" placeholder="Titulo da nota" oninput="onNoteTitleInput()">
+            <div id="ned" contenteditable="true" class="txtarea notes-txt" data-ph="Comece a escrever..."></div>
           </div>
         </div>
       </div>
-      <div id="scratch-hist"></div>
     </div>
 
     <div id="page-tarefas" class="page">
@@ -502,7 +540,19 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="fg"><label class="lbl">Prioridade</label>
       <select class="inp sel" id="tprio"><option>Alta</option><option selected>Media</option><option>Baixa</option></select>
     </div>
-    <div class="fg"><label class="lbl">Data limite (opcional)</label><input class="inp" type="date" id="tdue"></div>
+    <div class="fg"><label class="lbl">Data limite (opcional)</label><input class="inp" type="date" id="tdue" style="width:100%;min-width:0;box-sizing:border-box"></div>
+    <div class="fg"><label class="lbl">Recorrencia</label>
+      <select class="inp sel" id="trecur" onchange="toggleTaskRecurEnd()" style="width:100%">
+        <option value="">Nao se repete</option>
+        <option value="daily">Diariamente</option>
+        <option value="weekly">Semanalmente</option>
+        <option value="monthly">Mensalmente</option>
+      </select>
+    </div>
+    <div class="fg" id="trecur-end-wrap" style="display:none">
+      <label class="lbl">Repetir ate</label>
+      <input class="inp" type="date" id="trecur_end" style="width:100%;min-width:0;box-sizing:border-box">
+    </div>
     <div class="fg"><label class="lbl">Observacoes</label><textarea class="inp" id="tnotes" placeholder="Detalhes adicionais..." style="min-height:80px;resize:vertical"></textarea></div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
       <button class="btn btn-s" onclick="closeM('m-task')">Cancelar</button>
@@ -767,6 +817,7 @@ function renderHome(){
   renderHomeWeather();
   renderHomeWeek();
   renderHomeTasks();
+  renderProductivity();
 }
 function renderHomeToday(){
   var el=document.getElementById("home-today");
@@ -790,6 +841,91 @@ function renderHomeToday(){
     (streak>0?streak+(streak===1?' dia seguido':' dias seguidos'):'Comece hoje')+'</div></div></div>';
 
   html+="</div>";
+  el.innerHTML=html;
+}
+function renderProductivity(){
+  var el=document.getElementById("home-productivity");
+  if(!el||!tasks.length)return;
+  // Semana atual (Seg-Dom)
+  var today=new Date();
+  var dow=today.getDay();
+  var monday=new Date(today);monday.setDate(today.getDate()-(dow===0?6:dow-1));
+  var sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+  function toDs(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+  var monStr=toDs(monday);var sunStr=toDs(sunday);
+
+  var weekTasks=tasks.filter(function(t){
+    var d=t.due||t.created_at||"";
+    if(t.due)return t.due>=monStr&&t.due<=sunStr;
+    return false;
+  });
+  var allDone=tasks.filter(function(t){return t.done}).length;
+  var weekDone=weekTasks.filter(function(t){return t.done}).length;
+  var weekTotal=weekTasks.length;
+  var overdue=tasks.filter(function(t){return !t.done&&t.due&&t.due<toDs(today)}).length;
+  var pending=tasks.filter(function(t){return !t.done}).length;
+  var rate=weekTotal>0?Math.round(weekDone/weekTotal*100):0;
+
+  // Por categoria
+  var cats={};
+  tasks.forEach(function(t){
+    if(!t.category)return;
+    if(!cats[t.category])cats[t.category]={total:0,done:0};
+    cats[t.category].total++;
+    if(t.done)cats[t.category].done++;
+  });
+  var catKeys=Object.keys(cats).sort(function(a,b){return cats[b].total-cats[a].total}).slice(0,4);
+
+  // Tarefas por dia da semana
+  var dayBars=[];
+  for(var i=0;i<7;i++){
+    var d=new Date(monday);d.setDate(monday.getDate()+i);
+    var ds=toDs(d);
+    var dc=tasks.filter(function(t){return t.done&&t.due===ds}).length;
+    dayBars.push({ds:ds,count:dc,label:["Seg","Ter","Qua","Qui","Sex","Sab","Dom"][i]});
+  }
+  var maxBar=Math.max.apply(null,dayBars.map(function(b){return b.count}))||1;
+  var todayDs=toDs(today);
+
+  var html='<div class="card" style="padding:20px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">'+
+    '<div style="font-size:15px;font-weight:600;font-family:Lora,serif">Produtividade desta semana</div>'+
+    '<button class="btn btn-g sm" onclick="goTab(\'tarefas\',document.querySelectorAll(\'.tab\')[2])">Ver tarefas &#8594;</button></div>'+
+    // Métricas
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:20px">'+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--accent)">'+weekDone+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Concluidas</div></div>'+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--warn)">'+pending+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Pendentes</div></div>'+
+    (overdue?'<div style="background:var(--errl);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:var(--err)">'+overdue+'</div><div style="font-size:11px;color:var(--err);margin-top:2px">Atrasadas</div></div>':'')+
+    '<div style="background:var(--s2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:600;color:'+(rate>=70?"var(--ok)":rate>=40?"var(--warn)":"var(--err)")+'">'+rate+'%</div><div style="font-size:11px;color:var(--t3);margin-top:2px">Conclusao</div></div>'+
+    '</div>'+
+    // Barras por categoria
+    (catKeys.length?'<div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Por categoria</div>'+
+    catKeys.map(function(k){
+      var pct=cats[k].total>0?Math.round(cats[k].done/cats[k].total*100):0;
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
+        '<div style="font-size:13px;color:var(--t2);width:80px;flex-shrink:0">'+k+'</div>'+
+        '<div style="flex:1;height:8px;background:var(--s2);border-radius:4px;overflow:hidden">'+
+        '<div style="height:100%;border-radius:4px;background:var(--accent);width:'+pct+'%;transition:.3s"></div></div>'+
+        '<div style="font-size:12px;color:var(--t3);width:40px;text-align:right">'+cats[k].done+'/'+cats[k].total+'</div></div>';
+    }).join(""):'')+ 
+    // Gráfico de dias
+    '<div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px">Concluidas por dia</div>'+
+    '<div style="display:flex;align-items:flex-end;gap:6px;height:52px">'+
+    dayBars.map(function(b){
+      var h=Math.round(b.count/maxBar*100)||4;
+      var isToday=b.ds===todayDs;
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<div style="flex:1;width:100%;display:flex;align-items:flex-end">'+
+        '<div style="width:100%;height:'+h+'%;background:'+(isToday?"var(--accent)":"var(--al)")+';border-radius:3px 3px 0 0;min-height:4px"></div></div></div>';
+    }).join("")+
+    '</div>'+
+    '<div style="display:flex;gap:6px;margin-top:6px">'+
+    dayBars.map(function(b){
+      var isToday=b.ds===todayDs;
+      return '<div style="flex:1;text-align:center;font-size:10px;color:'+(isToday?"var(--accent)":"var(--t3)")+';font-weight:'+(isToday?"600":"400")+'">'+b.label+'</div>';
+    }).join("")+
+    '</div></div>';
+
   el.innerHTML=html;
 }
 function calcStreak(){
@@ -1298,102 +1434,149 @@ function renderStats(){
 }
 
 // ===== NOTES =====
-var scratchHistory=[];
+var notes=[]; // [{id,title,html,plain,pinned,ts,date}]
+var activeNoteId=null;
+var notesFilter="";
+
+function newNote(){
+  activeNoteId=null;
+  document.getElementById("note-title-input").value="";
+  document.getElementById("ned").innerHTML="";
+  document.getElementById("nsaved").textContent="Nova nota";
+  document.getElementById("notes-empty").classList.add("hidden");
+  document.getElementById("notes-editor").classList.add("visible");
+  document.getElementById("note-pin-btn").style.opacity="0.4";
+  document.querySelectorAll(".note-item").forEach(function(el){el.classList.remove("active")});
+  setTimeout(function(){document.getElementById("note-title-input").focus()},50);
+}
+function openNote(id){
+  var n=null;
+  for(var i=0;i<notes.length;i++){if(notes[i].id===id){n=notes[i];break}}
+  if(!n)return;
+  activeNoteId=id;
+  document.getElementById("note-title-input").value=n.title||"";
+  document.getElementById("ned").innerHTML=n.html||"";
+  document.getElementById("nsaved").textContent=n.ts||"";
+  document.getElementById("note-pin-btn").style.opacity=n.pinned?"1":"0.4";
+  document.getElementById("notes-empty").classList.add("hidden");
+  document.getElementById("notes-editor").classList.add("visible");
+  document.querySelectorAll(".note-item").forEach(function(el){
+    el.classList.toggle("active",el.getAttribute("data-id")===id);
+  });
+}
+function onNoteTitleInput(){
+  document.getElementById("nsaved").textContent="Nao salvo...";
+}
 async function saveNotes(){
   var ned=document.getElementById("ned");
   var htmlContent=ned.innerHTML;
   var plainText=ned.innerText.trim();
-  if(!plainText){toast("Escreva algo antes de salvar.","warn");return;}
+  var title=document.getElementById("note-title-input").value.trim()||"Nota sem titulo";
   var ds=todayStr();
-  var nid="scratch-"+Date.now();
   var ts=new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-  // Tentar com colunas extras; se falhar, usar apenas colunas base
-  var row={id:nid,user_id:currentUser.id,date:ds,content:htmlContent,plain_text:plainText,ts:ts,is_scratch:true};
-  console.log("[Lineo] saveNotes inserindo em day_notes...");
-  var res=await db.from("day_notes").insert(row);
-  if(res.error){
-    console.warn("[Lineo] saveNotes tentativa 1 falhou:",res.error.message,". Tentando sem colunas extras...");
-    var rowSimple={id:nid,user_id:currentUser.id,date:ds,content:"[Rascunho "+ts+"] "+plainText};
-    var res2=await db.from("day_notes").insert(rowSimple);
-    if(res2.error){
-      console.error("[Lineo] saveNotes ERRO final:",res2.error.message);
-      toast("Erro ao salvar rascunho: "+res2.error.message,"warn");
-      return;
+  if(activeNoteId){
+    var upd={content:htmlContent,plain_text:plainText,ts:ts,note_title:title};
+    await db.from("day_notes").update(upd).eq("id",activeNoteId).eq("user_id",currentUser.id);
+    for(var i=0;i<notes.length;i++){
+      if(notes[i].id===activeNoteId){
+        notes[i].html=htmlContent;notes[i].plain=plainText;notes[i].title=title;notes[i].ts=ts;break;
+      }
     }
+    toast("Nota salva!","ok");
+  } else {
+    var nid="note-"+Date.now();
+    var pinned=false;
+    var row={id:nid,user_id:currentUser.id,date:ds,content:htmlContent,plain_text:plainText,ts:ts,is_scratch:true,note_title:title,pinned:pinned};
+    var res=await db.from("day_notes").insert(row);
+    if(res.error){toast("Erro: "+res.error.message,"warn");return;}
+    notes.unshift({id:nid,title:title,html:htmlContent,plain:plainText,pinned:pinned,ts:ts,date:ds});
+    activeNoteId=nid;
   }
-  console.log("[Lineo] saveNotes OK");
-  // Atualiza cache local
-  if(!dayNotes[ds])dayNotes[ds]=[];
-  dayNotes[ds].push(row);
-  // Historico local da sessao
-  scratchHistory.unshift({id:nid,ts:ts,html:htmlContent,plain:plainText});
-  // Limpa area
-  ned.innerHTML="";
-  document.getElementById("nsaved").textContent="";
-  renderScratchHistory();
-  toast("Rascunho salvo!","ok");
+  document.getElementById("nsaved").textContent="Salvo: "+ts;
+  renderNotesList();
 }
+async function toggleNotePin(){
+  if(!activeNoteId)return;
+  var n=null;for(var i=0;i<notes.length;i++){if(notes[i].id===activeNoteId){n=notes[i];break}}
+  if(!n)return;
+  n.pinned=!n.pinned;
+  await db.from("day_notes").update({pinned:n.pinned}).eq("id",activeNoteId).eq("user_id",currentUser.id);
+  document.getElementById("note-pin-btn").style.opacity=n.pinned?"1":"0.4";
+  renderNotesList();
+  toast(n.pinned?"Nota fixada!":"Nota desfixada.","ok");
+}
+async function deleteCurrentNote(){
+  if(!activeNoteId){return;}
+  if(!confirm("Excluir esta nota permanentemente?"))return;
+  await db.from("day_notes").delete().eq("id",activeNoteId).eq("user_id",currentUser.id);
+  notes=notes.filter(function(n){return n.id!==activeNoteId});
+  activeNoteId=null;
+  document.getElementById("ned").innerHTML="";
+  document.getElementById("note-title-input").value="";
+  document.getElementById("notes-empty").classList.remove("hidden");
+  document.getElementById("notes-editor").classList.remove("visible");
+  renderNotesList();
+  toast("Nota excluida.","ok");
+}
+function filterNotes(){
+  notesFilter=document.getElementById("notes-search").value.toLowerCase();
+  renderNotesList();
+}
+function renderNotesList(){
+  var el=document.getElementById("notes-list");
+  if(!el)return;
+  var filtered=notes.filter(function(n){
+    if(!notesFilter)return true;
+    return (n.title||"").toLowerCase().includes(notesFilter)||(n.plain||"").toLowerCase().includes(notesFilter);
+  });
+  if(!filtered.length){
+    el.innerHTML='<div style="padding:20px;text-align:center;font-size:13px;color:var(--t3)">'+
+      (notesFilter?"Nenhuma nota encontrada":"Nenhuma nota ainda")+"</div>";
+    return;
+  }
+  var pinned=filtered.filter(function(n){return n.pinned});
+  var unpinned=filtered.filter(function(n){return !n.pinned});
+  var html="";
+  if(pinned.length){
+    html+='<div class="notes-period-lbl">Fixadas</div>';
+    html+=pinned.map(renderNoteItem).join("");
+  }
+  // Agrupar restantes por periodo
+  var today=todayStr();
+  var weekAgo=new Date();weekAgo.setDate(weekAgo.getDate()-7);
+  var weekAgoStr=weekAgo.getFullYear()+"-"+pad(weekAgo.getMonth()+1)+"-"+pad(weekAgo.getDate());
+  var todays=unpinned.filter(function(n){return(n.date||"")>=today});
+  var week=unpinned.filter(function(n){return(n.date||"")<today&&(n.date||"")>=weekAgoStr});
+  var older=unpinned.filter(function(n){return(n.date||"")<weekAgoStr});
+  if(todays.length){html+='<div class="notes-period-lbl">Hoje</div>';html+=todays.map(renderNoteItem).join("");}
+  if(week.length){html+='<div class="notes-period-lbl">Esta semana</div>';html+=week.map(renderNoteItem).join("");}
+  if(older.length){html+='<div class="notes-period-lbl">Anteriores</div>';html+=older.map(renderNoteItem).join("");}
+  el.innerHTML=html;
+}
+function renderNoteItem(n){
+  var isActive=n.id===activeNoteId;
+  return '<div class="note-item'+(isActive?" active":"")+'" data-id="'+n.id+'" onclick="openNote(this.getAttribute(\'data-id\'))">'+
+    '<div class="note-item-title">'+(n.pinned?'<span class="note-pin-badge">&#128204;</span>':"")+escHtml(n.title||"Nota sem titulo")+'</div>'+
+    '<div class="note-item-meta">'+(n.ts||n.date||"")+'</div>'+
+    '<div class="note-item-preview">'+escHtml((n.plain||"").slice(0,60))+"</div></div>";
+}
+function escHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 async function loadScratchHistory(){
   if(!currentUser)return;
   var r=await db.from("day_notes")
-    .select("*")
-    .eq("user_id",currentUser.id)
-    .eq("is_scratch",true)
-    .order("ts",{ascending:false})
-    .limit(30);
-  console.log("[Lineo] loadScratchHistory:", r.error?"ERRO:"+r.error.message:(r.data||[]).length+" itens");
+    .select("*").eq("user_id",currentUser.id).eq("is_scratch",true)
+    .order("ts",{ascending:false}).limit(50);
   if(r.data&&r.data.length){
-    scratchHistory=r.data.map(function(s){
-      return{id:s.id,ts:s.ts||s.date,html:s.content||"",plain:s.plain_text||s.content||""};
+    notes=r.data.map(function(s){
+      return{id:s.id,title:s.note_title||"Nota",html:s.content||"",plain:s.plain_text||s.content||"",pinned:s.pinned||false,ts:s.ts||s.date,date:s.date};
     });
+  } else {
+    notes=[];
   }
-  renderScratchHistory();
+  renderNotesList();
 }
-function renderScratchHistory(){
-  var el=document.getElementById("scratch-hist");
-  if(!el)return;
-  if(!scratchHistory.length){el.innerHTML="";return;}
-  var html='<div style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:12px">Rascunhos desta sessao</div>';
-  for(var i=0;i<Math.min(scratchHistory.length,20);i++){
-    var s=scratchHistory[i];
-    var idx=i;
-    html+='<div class="card" style="margin-bottom:10px;padding:14px 16px">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
-      '<span style="font-size:11px;color:var(--t3)">'+s.ts+'</span>'+
-      '<div style="display:flex;gap:6px">'+
-      '<button class="btn btn-s sm" data-idx="'+idx+'" onclick="editScratch(parseInt(this.getAttribute(\'data-idx\')))">&#9999; Editar</button>'+
-      '<button class="btn btn-d sm" data-idx="'+idx+'" data-id="'+s.id+'" onclick="delScratch(parseInt(this.getAttribute(\'data-idx\')),this.getAttribute(\'data-id\'))">&#128465;</button>'+
-      '</div></div>'+
-      '<div style="font-size:13px;color:var(--text);line-height:1.6">'+s.plain.slice(0,300)+(s.plain.length>300?"...":"")+"</div></div>";
-  }
-  el.innerHTML=html;
-}
-async function delScratch(idx,id){
-  if(!confirm("Excluir este rascunho?"))return;
-  if(id){await db.from("day_notes").delete().eq("id",id).eq("user_id",currentUser.id);}
-  scratchHistory.splice(idx,1);
-  renderScratchHistory();
-  toast("Rascunho excluido.","ok");
-}
-function editScratch(idx){
-  var s=scratchHistory[idx];
-  if(!s)return;
-  var ned=document.getElementById("ned");
-  // Se tem conteúdo no editor, confirmar antes de sobrescrever
-  if(ned.innerText.trim()){
-    if(!confirm("Substituir o rascunho atual pelo selecionado?"))return;
-  }
-  ned.innerHTML=s.html;
-  ned.focus();
-  // Mover para o topo
-  ned.scrollIntoView({behavior:"smooth",block:"start"});
-  document.getElementById("nsaved").textContent="Editando rascunho de "+s.ts;
-}
-async function clearNotes(){
-  if(!confirm("Limpar o rascunho atual?"))return;
-  document.getElementById("ned").innerHTML="";
-  document.getElementById("nsaved").textContent="";
-}
+// Manter compatibilidade com goTab("notas")
+function renderScratchHistory(){renderNotesList();}
 // Recarregar dados ao voltar para o app (sync entre dispositivos)
 var lastReload=0;
 var reloading=false;
@@ -1450,30 +1633,67 @@ function openNewTask(ds){
   document.getElementById("tprio").value="Media";
   document.getElementById("tdue").value=ds||"";
   document.getElementById("tnotes").value="";
+  document.getElementById("trecur").value="";
+  document.getElementById("trecur_end").value="";
+  document.getElementById("trecur-end-wrap").style.display="none";
   document.getElementById("tm-title").textContent="Nova tarefa";
   clrErr(["ttxt"]);openM("m-task");
+}
+function toggleTaskRecurEnd(){
+  var v=document.getElementById("trecur").value;
+  document.getElementById("trecur-end-wrap").style.display=v?"block":"none";
 }
 async function saveTask(){
   var text=document.getElementById("ttxt").value.trim();
   clrErr(["ttxt"]);
   if(!text){setErr("ttxt","A tarefa nao pode estar vazia.");return}
-  var id=document.getElementById("tid").value||(""+Date.now());
-  var existDone=false;
-  for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){existDone=tasks[i].done;break}}
-  var row={
-    id:id,user_id:currentUser.id,text:text,
+  var editId=document.getElementById("tid").value;
+  var recur=document.getElementById("trecur").value;
+  var recurEnd=document.getElementById("trecur_end").value;
+  var baseFields={
+    user_id:currentUser.id,text:text,
     category:document.getElementById("tcat").value,
     priority:document.getElementById("tprio").value,
     due:document.getElementById("tdue").value,
     notes:document.getElementById("tnotes").value,
-    done:existDone,created_at:Date.now()
+    done:false,created_at:Date.now()
   };
   showLoading(true);
-  await db.from("tasks").upsert(row);
+  if(editId){
+    // Edição simples
+    var existDone=false;
+    for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){existDone=tasks[i].done;break}}
+    var row=Object.assign({id:editId,done:existDone},baseFields);
+    await db.from("tasks").upsert(row);
+    var idx=-1;
+    for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){idx=i;break}}
+    if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
+  } else if(recur&&recurEnd&&baseFields.due){
+    // Gerar série recorrente
+    var dates=[baseFields.due];
+    var cur=baseFields.due;
+    var safety=0;
+    while(safety<366){
+      safety++;
+      if(recur==="daily")cur=addDays(cur,1);
+      else if(recur==="weekly")cur=addDays(cur,7);
+      else if(recur==="monthly")cur=addMonths(cur,1);
+      if(cur>recurEnd)break;
+      dates.push(cur);
+    }
+    var groupId="trec-"+Date.now();
+    var newRows=dates.map(function(d,i){
+      return Object.assign({id:groupId+"-"+i,due:d,recur_group:groupId},baseFields);
+    });
+    await db.from("tasks").insert(newRows);
+    tasks=newRows.concat(tasks);
+  } else {
+    var id=""+Date.now();
+    var row=Object.assign({id:id},baseFields);
+    await db.from("tasks").upsert(row);
+    tasks.unshift(row);
+  }
   showLoading(false);
-  var idx=-1;
-  for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){idx=i;break}}
-  if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
   closeM("m-task");renderTasks();renderStats();
   if(document.getElementById("page-inicio").classList.contains("active"))renderHomeTasks();
   if(document.getElementById("page-calendario").classList.contains("active"))renderCal();
@@ -1489,6 +1709,9 @@ function editTask(id){
   document.getElementById("tprio").value=t.priority||"Media";
   document.getElementById("tdue").value=t.due||"";
   document.getElementById("tnotes").value=t.notes||"";
+  document.getElementById("trecur").value="";
+  document.getElementById("trecur_end").value="";
+  document.getElementById("trecur-end-wrap").style.display="none";
   document.getElementById("tm-title").textContent="Editar tarefa";
   clrErr(["ttxt"]);openM("m-task");
 }
@@ -1504,9 +1727,23 @@ async function toggleTask(id){
   if(selDay)renderDayPanel(selDay);
 }
 async function delTask(id){
-  if(!confirm("Apagar esta tarefa?"))return;
-  await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
-  tasks=tasks.filter(function(t){return t.id!==id});
+  var t=null;
+  for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){t=tasks[i];break}}
+  if(!t)return;
+  if(t.recur_group){
+    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so esta");
+    if(delAll){
+      await db.from("tasks").delete().eq("recur_group",t.recur_group).eq("user_id",currentUser.id);
+      tasks=tasks.filter(function(x){return x.recur_group!==t.recur_group});
+    } else {
+      await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
+      tasks=tasks.filter(function(x){return x.id!==id});
+    }
+  } else {
+    if(!confirm("Apagar esta tarefa?"))return;
+    await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
+    tasks=tasks.filter(function(x){return x.id!==id});
+  }
   renderTasks();renderStats();
   if(selDay)renderDayPanel(selDay);
   toast("Tarefa apagada.");
@@ -1903,37 +2140,97 @@ setInterval(checkReminders,30000);
 
 // ===== SEARCH =====
 function doSearch(){
-  var q=document.getElementById("sinp").value.trim().toLowerCase();
+  var raw=document.getElementById("sinp").value.trim();
   var el=document.getElementById("sresults");
-  if(!q){el.innerHTML="";return}
+  if(!raw){el.innerHTML="";return}
+
+  // Separar termos — #tag busca tag exata, outros termos buscam em geral
+  var terms=raw.toLowerCase().split(/\s+/).filter(Boolean);
+  var tagTerms=terms.filter(function(t){return t.startsWith("#")}).map(function(t){return t.slice(1)});
+  var textTerms=terms.filter(function(t){return !t.startsWith("#")});
+
+  function matchesAll(haystack,terms){
+    var h=haystack.toLowerCase();
+    return terms.every(function(t){return h.indexOf(t)>=0});
+  }
+  function highlight(text,terms){
+    var safe=esc(text);
+    terms.forEach(function(t){
+      if(!t)return;
+      var re=new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi");
+      safe=safe.replace(re,'<mark style="background:#FFF3CD;border-radius:2px;padding:0 2px">$1</mark>');
+    });
+    return safe;
+  }
+
+  // Registros do diário
   var fe=entries.filter(function(e){
-    return (e.title+" "+e.body.replace(/<[^>]+>/g,"")).toLowerCase().indexOf(q)>=0||
-      (e.tags||[]).join(" ").toLowerCase().indexOf(q)>=0;
+    var body=e.body.replace(/<[^>]+>/g,"");
+    var tags=(e.tags||[]).map(function(t){return t.toLowerCase()});
+    // Tags exatas
+    if(tagTerms.length&&!tagTerms.every(function(t){return tags.indexOf(t)>=0}))return false;
+    // Termos de texto
+    if(textTerms.length&&!matchesAll(e.title+" "+body,textTerms))return false;
+    return tagTerms.length||textTerms.length;
   });
+
+  // Tarefas
   var ft=tasks.filter(function(t){
-    return (t.text+" "+(t.notes||"")+" "+(t.category||"")).toLowerCase().indexOf(q)>=0;
+    if(tagTerms.length)return false; // tags só existem em registros
+    return textTerms.length&&matchesAll(t.text+" "+(t.notes||"")+" "+(t.category||""),textTerms);
   });
+
+  // Eventos
+  var fev=events.filter(function(e){
+    if(tagTerms.length)return false;
+    return textTerms.length&&matchesAll(e.title+" "+(e.description||"")+" "+(e.location||""),textTerms);
+  });
+
+  // Notas (day_notes / notas)
   var fn=[];
-  var keys=Object.keys(dayNotes);
-  for(var k=0;k<keys.length;k++){
-    var ds=keys[k];var arr=dayNotes[ds]||[];
-    for(var j=0;j<arr.length;j++){
-      if(arr[j].content.toLowerCase().indexOf(q)>=0)fn.push({ds:ds,n:arr[j]});
+  if(!tagTerms.length&&textTerms.length){
+    var keys=Object.keys(dayNotes);
+    for(var k=0;k<keys.length;k++){
+      var ds=keys[k];var arr=dayNotes[ds]||[];
+      for(var j=0;j<arr.length;j++){
+        var nc=arr[j].content||"";
+        var nt=arr[j].note_title||"";
+        if(matchesAll(nc+" "+nt,textTerms))fn.push({ds:ds,n:arr[j]});
+      }
     }
+    // Também buscar em notes[]
+    notes.forEach(function(n){
+      if(matchesAll((n.title||"")+" "+(n.plain||""),textTerms))fn.push({ds:n.date,n:{content:n.plain,note_title:n.title,id:n.id}});
+    });
+    // Deduplicar por id
+    var seen={};
+    fn=fn.filter(function(x){if(seen[x.n.id])return false;seen[x.n.id]=true;return true});
   }
-  if(!fe.length&&!ft.length&&!fn.length){
-    el.innerHTML='<div class="empty"><div class="emtitle">Nenhum resultado para "'+esc(q)+'"</div></div>';return;
+
+  var total=fe.length+ft.length+fev.length+fn.length;
+  if(!total){
+    el.innerHTML='<div class="empty"><div class="emtitle">Nenhum resultado para "'+esc(raw)+'"</div>'+
+      '<div style="font-size:13px;color:var(--t3);margin-top:8px">Dica: use #tag para buscar por etiqueta exata</div></div>';
+    return;
   }
-  var total=fe.length+ft.length+fn.length;
-  var html='<div style="font-size:13px;color:var(--t3);margin-bottom:16px">'+total+" resultado"+(total>1?"s":"")+" encontrado"+(total>1?"s":"")+"</div>";
+
+  var html='<div style="font-size:13px;color:var(--t3);margin-bottom:16px">'+
+    total+" resultado"+(total>1?"s":"")+" para <strong>"+esc(raw)+"</strong></div>";
+
   if(fe.length){
-    html+='<div class="sstitle">Registros ('+fe.length+")</div>";
+    html+='<div class="sstitle">Registros do diario ('+fe.length+")</div>";
     for(var i=0;i<fe.length;i++){
       var e=fe[i];
       var preview=e.body.replace(/<[^>]+>/g,"").slice(0,140);
+      var tagHtml=(e.tags||[]).map(function(t){
+        var isMatch=tagTerms.indexOf(t.toLowerCase())>=0;
+        return '<span class="tag" style="'+(isMatch?"background:var(--al);color:var(--accent);font-weight:600":"")+'">#'+esc(t)+"</span>";
+      }).join("");
       html+='<div class="ecard"><div style="display:flex;justify-content:space-between;margin-bottom:8px">'+
-        '<div><div class="edate">'+fmtDate(e.date)+'</div><div class="etitle">'+e.title+'</div></div>'+
-        '<span class="chip che">Diario</span></div><div class="ebody">'+preview+"</div>"+
+        '<div><div class="edate">'+fmtDate(e.date)+'</div><div class="etitle">'+highlight(e.title,textTerms)+'</div></div>'+
+        '<span class="chip che">Diario</span></div>'+
+        '<div class="ebody">'+highlight(preview,textTerms)+"</div>"+
+        (tagHtml?'<div class="tagrow" style="margin-top:8px">'+tagHtml+"</div>":"")+
         '<div class="eacts"><button class="btn btn-s sm" data-id="'+e.id+'" onclick="viewEntry(this.getAttribute(\'data-id\'))">Ver</button></div></div>';
     }
   }
@@ -1941,23 +2238,41 @@ function doSearch(){
     html+='<div class="sstitle">Tarefas ('+ft.length+")</div>";
     for(var i=0;i<ft.length;i++){
       var t=ft[i];var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[t.priority]||"bm";
-      html+='<div class="titem'+(t.done?" done":"")+'"><div class="tchk'+(t.done?" chk":"")+'"></div>'+
-        '<div style="flex:1"><div class="ttxt">'+t.text+"</div>"+
-        '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+t.category+"</span>"+
+      html+='<div class="titem'+(t.done?" done":"")+'">'+
+        '<div class="tchk'+(t.done?" chk":"")+'"></div>'+
+        '<div style="flex:1"><div class="ttxt">'+highlight(t.text,textTerms)+"</div>"+
+        '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+esc(t.category||"")+"</span>"+
         '<span class="badge '+pc+'">'+t.priority+"</span></div></div>"+
-        '<span class="chip cht">Tarefa</span></div>';
+        '<button class="btn btn-s sm" data-id="'+t.id+'" onclick="editTask(this.getAttribute(\'data-id\'))">Editar</button></div>';
+    }
+  }
+  if(fev.length){
+    html+='<div class="sstitle">Eventos ('+fev.length+")</div>";
+    for(var i=0;i<fev.length;i++){
+      var ev=fev[i];
+      var color=ev.color||"var(--accent)";
+      html+='<div style="display:flex;align-items:center;gap:0;background:var(--al);border-radius:var(--r);margin-bottom:8px;overflow:hidden">'+
+        '<div style="width:4px;background:'+color+';flex-shrink:0;align-self:stretch"></div>'+
+        '<div style="padding:10px 12px;flex:1">'+
+        '<div style="font-size:12px;color:var(--t3)">'+fmtDate(ev.date)+(ev.event_time?" · "+ev.event_time:"")+'</div>'+
+        '<div style="font-weight:500">'+highlight(ev.title,textTerms)+'</div>'+
+        (ev.location?'<div style="font-size:12px;color:var(--t3)">&#128205; '+esc(ev.location)+"</div>":"")+
+        (ev.description?'<div style="font-size:12px;color:var(--t2)">'+highlight(ev.description,textTerms)+"</div>":"")+
+        '</div></div>';
     }
   }
   if(fn.length){
-    html+='<div class="sstitle">Anotacoes ('+fn.length+")</div>";
+    html+='<div class="sstitle">Notas ('+fn.length+")</div>";
     for(var i=0;i<fn.length;i++){
       var item=fn[i];
+      var noteTitle=item.n.note_title||"Anotacao";
+      var notePreview=(item.n.content||"").replace(/<[^>]+>/g,"").slice(0,120);
       html+='<div class="ecard" style="cursor:pointer" data-ds="'+item.ds+'" onclick="openCalToDay(this.getAttribute(\'data-ds\'))">'+
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'+
-        '<div><div class="edate">'+fmtDate(item.ds)+"</div>"+
-        '<div style="font-size:14px;margin-top:2px">'+esc(item.n.content.slice(0,120))+"</div></div>"+
-        '<span class="chip chn">Anotacao</span></div>'+
-        '<div style="font-size:12px;color:var(--t3)">Clique para abrir no calendario</div></div>';
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'+
+        '<div><div class="edate">'+fmtDate(item.ds)+'</div>'+
+        '<div style="font-size:14px;font-weight:500;margin-top:2px">'+highlight(noteTitle,textTerms)+'</div></div>'+
+        '<span class="chip chn">Nota</span></div>'+
+        '<div style="font-size:13px;color:var(--t2)">'+highlight(notePreview,textTerms)+"</div></div>";
     }
   }
   el.innerHTML=html;
