@@ -993,6 +993,7 @@ function scheduleNotifications(){
     var ms=toMs(ev.date,ev.event_time);
     if(!ms)return;
     schedule("&#128197; "+ev.title,"Evento em 15 minutos"+(ev.location?" — "+ev.location:""),ms-BEFORE);
+    schedule("&#128197; "+ev.title,"Comecando agora"+(ev.location?" — "+ev.location:""),ms);
   });
 
   // Tarefas com horário
@@ -1001,6 +1002,7 @@ function scheduleNotifications(){
     var ms=toMs(t.due,t.task_time);
     if(!ms)return;
     schedule("&#9989; "+t.text,"Tarefa em 15 minutos",ms-BEFORE);
+    schedule("&#9989; "+t.text,"Hora da tarefa!",ms);
   });
 
   // Lembretes
@@ -1009,6 +1011,7 @@ function scheduleNotifications(){
     var ms=toMs(r.date,r.reminder_time);
     if(!ms)return;
     schedule("&#128276; Lembrete",r.label,ms-BEFORE);
+    schedule("&#128276; "+r.label,"Agora!",ms);
   });
 }
 function fireNotif(title,body){
