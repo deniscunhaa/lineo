@@ -120,6 +120,12 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .hbar-bg{background:var(--s2);border-radius:20px;height:10px;overflow:hidden}
 .hbar-fill{background:var(--accent);height:100%;border-radius:20px;transition:width .3s}
 .hbpct{font-size:20px;font-weight:700;color:var(--accent);min-width:52px;text-align:right}
+.hbhandle{cursor:grab;padding:4px 2px;color:var(--t3);touch-action:none;font-size:16px;display:flex;align-items:center;margin-top:2px;flex-shrink:0}
+.hbhandle:active{cursor:grabbing}
+.hbstat-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.hbstat-row:last-child{border-bottom:none}
+.hbstat-badges{display:flex;gap:8px;flex-wrap:wrap}
+.hbstat-badge{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--s2);color:var(--t2)}
 .empty{text-align:center;padding:48px 24px;color:var(--t3)}
 .emico{font-size:36px;margin-bottom:10px}
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
@@ -467,19 +473,41 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         <button class="btn btn-p" onclick="openHabitModal()">+ Novo habito</button>
       </div>
       <div class="card" style="margin-bottom:20px;padding:20px">
-        <div class="calhdr" style="margin-bottom:20px">
-          <div class="calnav">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+          <div class="calnav" id="hb-daynav">
             <button class="btn btn-s sm" onclick="chHabitDay(-1)">Anterior</button>
             <div class="calmth" id="hbday-lbl">-</div>
             <button class="btn btn-s sm" onclick="chHabitDay(1)">Proximo</button>
           </div>
-          <button class="btn btn-g sm" onclick="goHabitToday()">Hoje</button>
+          <div class="calnav" id="hb-monthnav" style="display:none">
+            <button class="btn btn-s sm" onclick="chHabitMonth(-1)">Anterior</button>
+            <div class="calmth" id="hbmonth-lbl">-</div>
+            <button class="btn btn-s sm" onclick="chHabitMonth(1)">Proximo</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-g sm" onclick="goHabitToday()">Hoje</button>
+            <div style="display:flex;gap:4px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;flex-shrink:0">
+              <button id="hb-view-day" class="btn sm" onclick="setHabitView('day')" style="border:none;border-radius:0;background:var(--accent);color:#fff;padding:8px 14px">Dia</button>
+              <button id="hb-view-month" class="btn sm" onclick="setHabitView('month')" style="border:none;border-radius:0;background:transparent;color:var(--t2);padding:8px 14px">Mes</button>
+            </div>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-          <div style="flex:1"><div class="hbar-bg"><div class="hbar-fill" id="hbar-fill" style="width:0%"></div></div></div>
-          <div class="hbpct" id="hbpct">0%</div>
+        <div id="hb-day-panel">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+            <div style="flex:1"><div class="hbar-bg"><div class="hbar-fill" id="hbar-fill" style="width:0%"></div></div></div>
+            <div class="hbpct" id="hbpct">0%</div>
+          </div>
+          <div id="hblist"></div>
         </div>
-        <div id="hblist"></div>
+        <div id="hb-month-panel" style="display:none">
+          <div class="calgrid" id="hbcalhd"></div>
+          <div class="calgrid" id="hbcalgrid" style="margin-top:4px"></div>
+        </div>
+      </div>
+      <div class="card" style="padding:20px">
+        <div style="font-size:15px;font-weight:600;font-family:Lora,serif;margin-bottom:2px">Desempenho por habito</div>
+        <div class="secsub" style="margin-bottom:8px">Percentual de conclusao em cada periodo</div>
+        <div id="hbstats"></div>
       </div>
     </div>
 
@@ -871,7 +899,7 @@ function goTab(id,el){
   if(id==="calendario")renderCal();
   if(id==="lembretes")renderReminders();
   if(id==="notas"){loadScratchHistory();}
-  if(id==="habitos"){renderHabits();}
+  if(id==="habitos"){renderHabitsView();}
 }
 function goHome(){
   document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("active")});
@@ -2028,16 +2056,48 @@ function renderTasks(){
 // ===== HABITS =====
 var HMN=["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 var HDN=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
+var habitView="day";
+var habitMonthDate=new Date();
+var hbDrag={active:false,idx:null};
 function todayHabitDate(){return habitDay||todayStr()}
+function habitLogFor(habitId,date){
+  return habitLogs.find(function(l){return l.habit_id===habitId&&l.date===date});
+}
+function activeHabits(){return habits.filter(function(h){return h.active!==false})}
+function renderHabitsView(){
+  if(habitView==="month")renderHabitsMonth(); else renderHabits();
+  renderHabitStats();
+}
+function setHabitView(v){
+  habitView=v;
+  document.getElementById("hb-view-day").style.background=v==="day"?"var(--accent)":"transparent";
+  document.getElementById("hb-view-day").style.color=v==="day"?"#fff":"var(--t2)";
+  document.getElementById("hb-view-month").style.background=v==="month"?"var(--accent)":"transparent";
+  document.getElementById("hb-view-month").style.color=v==="month"?"#fff":"var(--t2)";
+  document.getElementById("hb-daynav").style.display=v==="day"?"flex":"none";
+  document.getElementById("hb-monthnav").style.display=v==="month"?"flex":"none";
+  document.getElementById("hb-day-panel").style.display=v==="day"?"block":"none";
+  document.getElementById("hb-month-panel").style.display=v==="month"?"block":"none";
+  renderHabitsView();
+}
 function chHabitDay(d){
   var base=new Date(todayHabitDate()+"T00:00:00");
   base.setDate(base.getDate()+d);
   habitDay=base.getFullYear()+"-"+pad(base.getMonth()+1)+"-"+pad(base.getDate());
   renderHabits();
 }
-function goHabitToday(){habitDay=null;renderHabits();}
-function habitLogFor(habitId,date){
-  return habitLogs.find(function(l){return l.habit_id===habitId&&l.date===date});
+function chHabitMonth(d){
+  habitMonthDate=new Date(habitMonthDate.getFullYear(),habitMonthDate.getMonth()+d,1);
+  renderHabitsMonth();
+}
+function goHabitToday(){
+  habitDay=null;
+  habitMonthDate=new Date();
+  renderHabitsView();
+}
+function jumpHabitDay(ds){
+  habitDay=ds;
+  setHabitView("day");
 }
 async function toggleHabitLog(habitId){
   var date=todayHabitDate();
@@ -2051,7 +2111,7 @@ async function toggleHabitLog(habitId){
     var res=await db.from("habit_logs").insert(row).select();
     if(!res.error&&res.data&&res.data[0])habitLogs.push(res.data[0]);
   }
-  renderHabits();
+  renderHabitsView();
   renderHomeHabits();
 }
 function renderHabits(){
@@ -2062,7 +2122,7 @@ function renderHabits(){
     var isToday=date===todayStr();
     lbl.textContent=(isToday?"Hoje - ":"")+HDN[d.getDay()]+", "+d.getDate()+" de "+HMN[d.getMonth()];
   }
-  var active=habits.filter(function(h){return h.active!==false});
+  var active=activeHabits();
   var el=document.getElementById("hblist");
   if(!el)return;
   var fillEl=document.getElementById("hbar-fill"), pctEl=document.getElementById("hbpct");
@@ -2079,7 +2139,8 @@ function renderHabits(){
     var log=habitLogFor(h.id,date);
     var isDone=!!(log&&log.done);
     if(isDone)done++;
-    html+='<div class="titem'+(isDone?" done":"")+'">'+
+    html+='<div class="titem hbrow'+(isDone?" done":"")+'" data-idx="'+i+'">'+
+      '<div class="hbhandle" onpointerdown="hbDragStart(event,'+i+')" title="Arraste para reordenar">&#9776;</div>'+
       '<div class="tchk'+(isDone?" chk":"")+'" data-id="'+h.id+'" onclick="toggleHabitLog(this.getAttribute(\'data-id\'))"></div>'+
       '<div style="flex:1"><div class="ttxt">'+esc(h.name)+"</div></div>"+
       '<div style="display:flex;gap:4px">'+
@@ -2092,10 +2153,124 @@ function renderHabits(){
   if(fillEl)fillEl.style.width=pct+"%";
   if(pctEl)pctEl.textContent=pct+"%";
 }
+function renderHabitsMonth(){
+  var hd=document.getElementById("hbcalhd");
+  var el=document.getElementById("hbcalgrid");
+  var lbl=document.getElementById("hbmonth-lbl");
+  if(!el||!hd)return;
+  hd.innerHTML=HDN.map(function(d){return '<div class="caldh">'+d+"</div>"}).join("");
+  var yr=habitMonthDate.getFullYear(), mo=habitMonthDate.getMonth();
+  if(lbl)lbl.textContent=HMN[mo]+" "+yr;
+  var first=new Date(yr,mo,1), last=new Date(yr,mo+1,0);
+  var active=activeHabits();
+  var cells=[];
+  for(var i=0;i<first.getDay();i++)cells.push(null);
+  for(var d=1;d<=last.getDate();d++)cells.push(d);
+  while(cells.length%7!==0)cells.push(null);
+  var todayS=todayStr();
+  var html="";
+  for(var i=0;i<cells.length;i++){
+    var d=cells[i];
+    if(!d){html+='<div class="calday other"></div>';continue;}
+    var ds=yr+"-"+pad(mo+1)+"-"+pad(d);
+    var total=active.length, done=0;
+    for(var j=0;j<active.length;j++){
+      var log=habitLogFor(active[j].id,ds);
+      if(log&&log.done)done++;
+    }
+    var pct=total?Math.round(done/total*100):0;
+    var cls="calday"+(ds===todayS?" today":"");
+    var bg=pct===100?"background:var(--ok);color:#fff":(pct>0?"background:var(--al)":"");
+    html+='<div class="'+cls+'" style="cursor:pointer;'+bg+'" onclick="jumpHabitDay(\''+ds+'\')">'+
+      '<div class="calnum">'+d+"</div>"+
+      (total?'<div style="font-size:11px;font-weight:600">'+pct+"%</div>":"")+
+      "</div>";
+  }
+  el.innerHTML=html;
+}
+function hbDragStart(e,idx){
+  e.preventDefault();
+  hbDrag.active=true;
+  hbDrag.idx=idx;
+  document.body.style.userSelect="none";
+  window.addEventListener("pointermove",hbDragMove);
+  window.addEventListener("pointerup",hbDragEnd);
+}
+function hbDragMove(e){
+  if(!hbDrag.active)return;
+  var elAt=document.elementFromPoint(e.clientX,e.clientY);
+  var row=elAt&&elAt.closest?elAt.closest(".hbrow"):null;
+  if(!row)return;
+  var overIdx=parseInt(row.getAttribute("data-idx"),10);
+  if(isNaN(overIdx)||overIdx===hbDrag.idx)return;
+  var active=activeHabits();
+  var inactive=habits.filter(function(h){return h.active===false});
+  var moved=active.splice(hbDrag.idx,1)[0];
+  active.splice(overIdx,0,moved);
+  habits=active.concat(inactive);
+  hbDrag.idx=overIdx;
+  renderHabits();
+}
+async function hbDragEnd(){
+  window.removeEventListener("pointermove",hbDragMove);
+  window.removeEventListener("pointerup",hbDragEnd);
+  document.body.style.userSelect="";
+  if(!hbDrag.active)return;
+  hbDrag.active=false;
+  hbDrag.idx=null;
+  var uid=currentUser.id;
+  var active=activeHabits();
+  for(var i=0;i<active.length;i++){
+    active[i].order_index=i;
+    await db.from("habits").update({order_index:i}).eq("id",active[i].id).eq("user_id",uid);
+  }
+  renderHabitStats();
+}
+function daysAgoStr(n){
+  var d=new Date();
+  d.setDate(d.getDate()-n);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function habitPercentForWindow(habit,windowDays){
+  var today=new Date();today.setHours(0,0,0,0);
+  var created=habit.created_at?new Date(habit.created_at):null;
+  if(created)created.setHours(0,0,0,0);
+  var daysSinceCreated=created?Math.floor((today-created)/86400000)+1:windowDays;
+  var applicable=Math.max(1,Math.min(windowDays,daysSinceCreated));
+  var done=0;
+  for(var i=0;i<applicable;i++){
+    var log=habitLogFor(habit.id,daysAgoStr(i));
+    if(log&&log.done)done++;
+  }
+  return Math.round(done/applicable*100);
+}
+function renderHabitStats(){
+  var el=document.getElementById("hbstats");
+  if(!el)return;
+  var active=activeHabits();
+  if(!active.length){
+    el.innerHTML='<div class="empty"><div class="emtitle">Nenhum habito para mostrar</div></div>';
+    return;
+  }
+  var html="";
+  for(var i=0;i<active.length;i++){
+    var h=active[i];
+    var p7=habitPercentForWindow(h,7);
+    var p15=habitPercentForWindow(h,15);
+    var p30=habitPercentForWindow(h,30);
+    html+='<div class="hbstat-row"><div style="font-weight:500">'+esc(h.name)+"</div>"+
+      '<div class="hbstat-badges">'+
+      '<span class="hbstat-badge">Semana: '+p7+"%</span>"+
+      '<span class="hbstat-badge">Quinzena: '+p15+"%</span>"+
+      '<span class="hbstat-badge">Mes: '+p30+"%</span>"+
+      "</div></div>";
+  }
+  el.innerHTML=html;
+}
 function renderHomeHabits(){
   var el=document.getElementById("home-habits");
   if(!el)return;
-  var active=habits.filter(function(h){return h.active!==false});
+  var active=activeHabits();
   if(!active.length){el.innerHTML="";return;}
   var date=todayStr();
   var done=0;
@@ -2159,7 +2334,7 @@ async function saveHabit(){
     if(!res.error&&res.data&&res.data[0])habits.push(res.data[0]);
   }
   closeM("m-habit");
-  renderHabits();
+  renderHabitsView();
   renderHomeHabits();
 }
 async function delHabit(id){
@@ -2168,7 +2343,7 @@ async function delHabit(id){
   await db.from("habits").update({active:false}).eq("id",id).eq("user_id",uid);
   var h=habits.find(function(x){return x.id===id});
   if(h)h.active=false;
-  renderHabits();
+  renderHabitsView();
   renderHomeHabits();
 }
 
