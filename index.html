@@ -575,8 +575,9 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="fg"><label class="lbl">Titulo do evento</label><input class="inp" id="evtitle" placeholder="Nome do compromisso"><div class="errmsg" id="e-evtitle"></div></div>
     <div class="fg"><label class="lbl">Data</label><input class="inp" type="date" id="evdate" style="width:100%;min-width:0;box-sizing:border-box"><div class="errmsg" id="e-evdate"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;min-width:0">
-      <div style="min-width:0"><label class="lbl">Inicio</label><select class="inp sel" id="evtime" onchange="autoAdjustEndTime()" style="width:100%;min-width:0;box-sizing:border-box"><option value="">--:--</option></select></div>
-      <div style="min-width:0"><label class="lbl">Termino</label><select class="inp sel" id="evtime_end" style="width:100%;min-width:0;box-sizing:border-box"><option value="">--:--</option></select></div>
+      <div style="min-width:0"><label class="lbl">Inicio</label><input class="inp" id="evtime" list="time-options" placeholder="00:00" autocomplete="off" oninput="autoAdjustEndTime()" onchange="autoAdjustEndTime()" style="width:100%;min-width:0;box-sizing:border-box"></div>
+      <div style="min-width:0"><label class="lbl">Termino</label><input class="inp" id="evtime_end" list="time-options" placeholder="00:00" autocomplete="off" style="width:100%;min-width:0;box-sizing:border-box"></div>
+      <datalist id="time-options"></datalist>
     </div>
     <div class="fg"><label class="lbl">Recorrencia</label>
       <select class="inp sel" id="evrecur" onchange="toggleRecurEnd()" style="width:100%">
@@ -2108,61 +2109,55 @@ function renderDayEntries(ds){
   }
   el.innerHTML=html;
 }
-// Gerar opções de horário a cada 15 minutos
-function buildTimeOptions(selectId, selectedVal){
-  var sel=document.getElementById(selectId);
-  var html='<option value="">--:--</option>';
+// Popular datalist de horários com intervalos de 15 min (feito uma vez)
+function buildTimeSuggestions(){
+  var dl=document.getElementById("time-options");
+  if(!dl||dl.children.length>0)return; // já populado
+  var html="";
   for(var h=0;h<24;h++){
     for(var m=0;m<60;m+=15){
-      var hh=pad(h);var mm=pad(m);
-      var val=hh+":"+mm;
-      html+='<option value="'+val+'"'+(val===selectedVal?' selected':'')+'>'+val+'</option>';
+      html+='<option value="'+pad(h)+":"+pad(m)+'"></option>';
     }
   }
-  sel.innerHTML=html;
+  dl.innerHTML=html;
 }
 // Quando muda o horário de início, ajusta o término mantendo a mesma duração
 function autoAdjustEndTime(){
-  var startSel=document.getElementById("evtime");
-  var endSel=document.getElementById("evtime_end");
-  var newStart=startSel.value;
-  if(!newStart){return;}
-  var prevStart=startSel.getAttribute("data-prev")||"";
-  var curEnd=endSel.value;
-  if(prevStart&&curEnd){
-    // Calcular duração anterior em minutos
+  var startEl=document.getElementById("evtime");
+  var endEl=document.getElementById("evtime_end");
+  var newStart=startEl.value;
+  if(!newStart||!newStart.match(/^\d{1,2}:\d{2}$/))return;
+  var prevStart=startEl.getAttribute("data-prev")||"";
+  var curEnd=endEl.value;
+  if(prevStart&&curEnd&&curEnd.match(/^\d{1,2}:\d{2}$/)){
     var ps=prevStart.split(":");var pe=curEnd.split(":");
     var durMin=(parseInt(pe[0])*60+parseInt(pe[1]))-(parseInt(ps[0])*60+parseInt(ps[1]));
     if(durMin>0&&durMin<=480){
-      // Aplicar mesma duração ao novo início
       var ns=newStart.split(":");
       var newEndMin=parseInt(ns[0])*60+parseInt(ns[1])+durMin;
       if(newEndMin<1440){
         var newEndH=Math.floor(newEndMin/60);
         var newEndM=newEndMin%60;
-        // Arredondar para 15min mais próximo
         newEndM=Math.round(newEndM/15)*15;
         if(newEndM>=60){newEndH++;newEndM=0;}
-        var newEndVal=pad(newEndH)+":"+pad(newEndM);
-        endSel.value=newEndVal;
+        endEl.value=pad(newEndH)+":"+pad(newEndM);
       }
     }
   } else if(!curEnd){
-    // Se não tinha término, sugerir 1h depois
     var ns2=newStart.split(":");
     var newEndMin2=parseInt(ns2[0])*60+parseInt(ns2[1])+60;
     if(newEndMin2<1440){
-      endSel.value=pad(Math.floor(newEndMin2/60))+":"+pad(newEndMin2%60);
+      endEl.value=pad(Math.floor(newEndMin2/60))+":"+pad(newEndMin2%60);
     }
   }
-  startSel.setAttribute("data-prev",newStart);
+  startEl.setAttribute("data-prev",newStart);
 }
 function openEventModal(ds){
   document.getElementById("evid").value="";
   document.getElementById("evtitle").value="";
   document.getElementById("evdate").value=ds||todayStr();
-  buildTimeOptions("evtime","");
-  buildTimeOptions("evtime_end","");
+  document.getElementById("evtime").value="";
+  document.getElementById("evtime_end").value="";
   document.getElementById("evtime").removeAttribute("data-prev");
   document.getElementById("evdesc").value="";
   document.getElementById("evlocal").value="";
@@ -2171,6 +2166,7 @@ function openEventModal(ds){
   document.getElementById("evrecur-end-wrap").style.display="none";
   selectEvColor("#2A9D7C");
   document.getElementById("evm-title").textContent="Novo evento";
+  buildTimeSuggestions();
   clrErr(["evtitle","evdate"]);openM("m-event");
 }
 function editEvent(id){
@@ -2180,8 +2176,8 @@ function editEvent(id){
   document.getElementById("evid").value=ev.id;
   document.getElementById("evtitle").value=ev.title;
   document.getElementById("evdate").value=ev.date;
-  buildTimeOptions("evtime",ev.event_time||"");
-  buildTimeOptions("evtime_end",ev.event_time_end||"");
+  document.getElementById("evtime").value=ev.event_time||"";
+  document.getElementById("evtime_end").value=ev.event_time_end||"";
   document.getElementById("evtime").setAttribute("data-prev",ev.event_time||"");
   document.getElementById("evdesc").value=ev.description||"";
   document.getElementById("evlocal").value=ev.location||"";
@@ -2190,6 +2186,7 @@ function editEvent(id){
   document.getElementById("evrecur-end-wrap").style.display="none";
   selectEvColor(ev.color||"#2A9D7C");
   document.getElementById("evm-title").textContent="Editar evento";
+  buildTimeSuggestions();
   clrErr(["evtitle","evdate"]);openM("m-event");
 }
 function selectEvColor(c){
