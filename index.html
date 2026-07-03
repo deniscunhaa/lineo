@@ -273,13 +273,13 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
   </div>
   <div class="tabs">
     <div class="tab active" onclick="goTab('inicio',this)">Inicio</div>
+    <div class="tab" id="tab-habitos" onclick="goTab('habitos',this)">Habitos</div>
     <div class="tab" onclick="goTab('diario',this)">Diario</div>
     <div class="tab" onclick="goTab('notas',this)">Notas</div>
     <div class="tab" onclick="goTab('tarefas',this)">Tarefas</div>
     <div class="tab" onclick="goTab('calendario',this)">Calendario</div>
     <div class="tab" onclick="goTab('lembretes',this)">Lembretes</div>
     <div class="tab" onclick="goTab('busca',this)">Busca</div>
-    <div class="tab" onclick="goTab('habitos',this)">Habitos</div>
   </div>
   <div class="main">
 
@@ -290,16 +290,16 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <div id="stats" class="stats"></div>
       <div id="home-weather" style="margin-bottom:20px"></div>
       <div id="home-today" style="margin-bottom:20px"></div>
-      <div id="home-habits" style="margin-bottom:20px"></div>
       <div class="card" style="margin-bottom:20px;padding:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <div style="font-size:15px;font-weight:600;font-family:Lora,serif">Esta semana</div>
-          <button class="btn btn-g sm" onclick="goTab('calendario',document.querySelectorAll('.tab')[4])">Ver calendario completo &#8594;</button>
+          <button class="btn btn-g sm" onclick="goTab('calendario',document.querySelectorAll('.tab')[5])">Ver calendario completo &#8594;</button>
         </div>
         <div id="home-week" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
         <div id="home-events" style="margin-top:16px"></div>
         <div id="home-tasks" style="margin-top:16px"></div>
       </div>
+      <div id="home-habits" style="margin-bottom:20px"></div>
       <div id="home-productivity" style="margin-bottom:20px"></div>
     </div>
 
@@ -1410,7 +1410,7 @@ function renderTasksByDay(){
   el.innerHTML=html;
 }
 function navToCalDay(ds){
-  goTab("calendario",document.querySelectorAll(".tab")[4]);
+  goTab("calendario",document.querySelectorAll(".tab")[5]);
   calDate=new Date(ds+"T12:00:00");
   setTimeout(function(){renderCal();openDayPanel(ds)},50);
 }
@@ -2123,8 +2123,7 @@ function renderHomeHabits(){
     "</div>";
 }
 function goHabitosTab(){
-  var tabs=document.querySelectorAll(".tab");
-  goTab("habitos",tabs[tabs.length-1]);
+  goTab("habitos",document.getElementById("tab-habitos"));
 }
 function openHabitModal(){
   document.getElementById("hbid").value="";
