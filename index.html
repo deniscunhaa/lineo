@@ -264,6 +264,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     </div>
     <div style="display:flex;align-items:center;gap:12px">
       <div class="user-badge" id="user-email-lbl"></div>
+      <button class="btn btn-s sm" onclick="testNotif()" title="Testar notificacao">&#128276;</button>
       <button class="btn btn-s sm" onclick="doLogout()">Sair</button>
     </div>
   </div>
@@ -574,8 +575,8 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="fg"><label class="lbl">Titulo do evento</label><input class="inp" id="evtitle" placeholder="Nome do compromisso"><div class="errmsg" id="e-evtitle"></div></div>
     <div class="fg"><label class="lbl">Data</label><input class="inp" type="date" id="evdate" style="width:100%;min-width:0;box-sizing:border-box"><div class="errmsg" id="e-evdate"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;min-width:0">
-      <div style="min-width:0"><label class="lbl">Inicio</label><input class="inp" type="time" id="evtime" style="width:100%;min-width:0;box-sizing:border-box"></div>
-      <div style="min-width:0"><label class="lbl">Termino</label><input class="inp" type="time" id="evtime_end" style="width:100%;min-width:0;box-sizing:border-box"></div>
+      <div style="min-width:0"><label class="lbl">Inicio</label><select class="inp sel" id="evtime" onchange="autoAdjustEndTime()" style="width:100%;min-width:0;box-sizing:border-box"><option value="">--:--</option></select></div>
+      <div style="min-width:0"><label class="lbl">Termino</label><select class="inp sel" id="evtime_end" style="width:100%;min-width:0;box-sizing:border-box"><option value="">--:--</option></select></div>
     </div>
     <div class="fg"><label class="lbl">Recorrencia</label>
       <select class="inp sel" id="evrecur" onchange="toggleRecurEnd()" style="width:100%">
@@ -980,14 +981,22 @@ async function requestNotifPermission(){
   var perm=await Notification.requestPermission();
   if(perm==="granted"){
     toast("Notificacoes ativadas!","ok");
-    // Teste imediato para confirmar que funciona
-    setTimeout(function(){
-      fireNotif("Lineo","Notificacoes ativadas com sucesso!");
-    },1000);
+    setTimeout(function(){fireNotif("Lineo","Notificacoes funcionando!");},500);
     startNotifPolling();
   } else {
     toast("Permissao negada — ative nas configuracoes do navegador","warn");
   }
+}
+async function testNotif(){
+  if(!("Notification" in window)){toast("Notificacoes nao suportadas neste navegador","warn");return;}
+  if(Notification.permission==="denied"){toast("Notificacoes bloqueadas — va em Configuracoes do navegador para desbloquear","warn");return;}
+  if(Notification.permission==="default"){
+    var perm=await Notification.requestPermission();
+    if(perm!=="granted"){toast("Permissao negada","warn");return;}
+    startNotifPolling();
+  }
+  fireNotif("Lineo — Teste","Notificacoes estao funcionando!");
+  toast("Notificacao de teste enviada!","ok");
 }
 function startNotifPolling(){
   if(notifPollInterval)clearInterval(notifPollInterval);
@@ -1191,8 +1200,12 @@ function renderHomeWeek(){
     if(ds<nowStr)continue; // ignora dias anteriores a hoje
     var dayEvs=events.filter(function(e){
       if(e.date!==ds)return false;
-      // Para eventos de hoje com horário definido, verifica se ainda não passou
-      if(ds===nowStr && e.event_time && e.event_time<nowTime)return false;
+      // Para eventos de hoje com horário definido, verifica se já terminou
+      if(ds===nowStr && e.event_time){
+        // Se tem horário de término, mantém até ele passar; senão filtra pelo início
+        var endTime=e.event_time_end||e.event_time;
+        if(endTime<nowTime)return false;
+      }
       return true;
     }).sort(function(a,b){return(a.event_time||"").localeCompare(b.event_time||"")});
     for(var j=0;j<dayEvs.length;j++)upcoming.push({ds:ds,d:d,ev:dayEvs[j]});
@@ -1844,7 +1857,7 @@ async function saveTask(){
     }
     var groupId="trec"+Date.now();
     var newRows=dates.map(function(d,i){
-      return Object.assign({id:groupId+"x"+i,due:d,recur_group:groupId},baseFields);
+      return Object.assign({},baseFields,{id:groupId+"x"+i,due:d,recur_group:groupId});
     });
     var rres2=await db.from("tasks").insert(newRows);
     if(rres2.error){toast("Erro ao salvar serie: "+rres2.error.message,"warn");showLoading(false);return;}
@@ -2095,12 +2108,62 @@ function renderDayEntries(ds){
   }
   el.innerHTML=html;
 }
+// Gerar opções de horário a cada 15 minutos
+function buildTimeOptions(selectId, selectedVal){
+  var sel=document.getElementById(selectId);
+  var html='<option value="">--:--</option>';
+  for(var h=0;h<24;h++){
+    for(var m=0;m<60;m+=15){
+      var hh=pad(h);var mm=pad(m);
+      var val=hh+":"+mm;
+      html+='<option value="'+val+'"'+(val===selectedVal?' selected':'')+'>'+val+'</option>';
+    }
+  }
+  sel.innerHTML=html;
+}
+// Quando muda o horário de início, ajusta o término mantendo a mesma duração
+function autoAdjustEndTime(){
+  var startSel=document.getElementById("evtime");
+  var endSel=document.getElementById("evtime_end");
+  var newStart=startSel.value;
+  if(!newStart){return;}
+  var prevStart=startSel.getAttribute("data-prev")||"";
+  var curEnd=endSel.value;
+  if(prevStart&&curEnd){
+    // Calcular duração anterior em minutos
+    var ps=prevStart.split(":");var pe=curEnd.split(":");
+    var durMin=(parseInt(pe[0])*60+parseInt(pe[1]))-(parseInt(ps[0])*60+parseInt(ps[1]));
+    if(durMin>0&&durMin<=480){
+      // Aplicar mesma duração ao novo início
+      var ns=newStart.split(":");
+      var newEndMin=parseInt(ns[0])*60+parseInt(ns[1])+durMin;
+      if(newEndMin<1440){
+        var newEndH=Math.floor(newEndMin/60);
+        var newEndM=newEndMin%60;
+        // Arredondar para 15min mais próximo
+        newEndM=Math.round(newEndM/15)*15;
+        if(newEndM>=60){newEndH++;newEndM=0;}
+        var newEndVal=pad(newEndH)+":"+pad(newEndM);
+        endSel.value=newEndVal;
+      }
+    }
+  } else if(!curEnd){
+    // Se não tinha término, sugerir 1h depois
+    var ns2=newStart.split(":");
+    var newEndMin2=parseInt(ns2[0])*60+parseInt(ns2[1])+60;
+    if(newEndMin2<1440){
+      endSel.value=pad(Math.floor(newEndMin2/60))+":"+pad(newEndMin2%60);
+    }
+  }
+  startSel.setAttribute("data-prev",newStart);
+}
 function openEventModal(ds){
   document.getElementById("evid").value="";
   document.getElementById("evtitle").value="";
   document.getElementById("evdate").value=ds||todayStr();
-  document.getElementById("evtime").value="";
-  document.getElementById("evtime_end").value="";
+  buildTimeOptions("evtime","");
+  buildTimeOptions("evtime_end","");
+  document.getElementById("evtime").removeAttribute("data-prev");
   document.getElementById("evdesc").value="";
   document.getElementById("evlocal").value="";
   document.getElementById("evrecur").value="";
@@ -2117,8 +2180,9 @@ function editEvent(id){
   document.getElementById("evid").value=ev.id;
   document.getElementById("evtitle").value=ev.title;
   document.getElementById("evdate").value=ev.date;
-  document.getElementById("evtime").value=ev.event_time||"";
-  document.getElementById("evtime_end").value=ev.event_time_end||"";
+  buildTimeOptions("evtime",ev.event_time||"");
+  buildTimeOptions("evtime_end",ev.event_time_end||"");
+  document.getElementById("evtime").setAttribute("data-prev",ev.event_time||"");
   document.getElementById("evdesc").value=ev.description||"";
   document.getElementById("evlocal").value=ev.location||"";
   document.getElementById("evrecur").value="";
@@ -2195,7 +2259,7 @@ async function saveEvent(){
     }
     var groupId="rec"+Date.now();
     var newRows=dates.map(function(d,i){
-      return Object.assign({id:groupId+"x"+i,user_id:currentUser.id,date:d,recur_group:groupId},baseFields);
+      return Object.assign({},baseFields,{id:groupId+"x"+i,user_id:currentUser.id,date:d,recur_group:groupId});
     });
     var rres=await db.from("events").insert(newRows);
     if(rres.error){toast("Erro ao salvar serie: "+rres.error.message,"warn");showLoading(false);return;}
@@ -2273,9 +2337,9 @@ async function saveReminder(){
       if(cur>recurEnd)break;
       dates.push(cur);
     }
-    var groupId="rrec-"+Date.now();
+    var groupId="rrec"+Date.now();
     var newRows=dates.map(function(d,i){
-      return{id:groupId+"-"+i,user_id:currentUser.id,label:lbl,date:d,reminder_time:time,fired:false,recur_group:groupId};
+      return{id:groupId+"x"+i,user_id:currentUser.id,label:lbl,date:d,reminder_time:time,fired:false,recur_group:groupId};
     });
     await db.from("reminders").insert(newRows);
     reminders=reminders.concat(newRows);
