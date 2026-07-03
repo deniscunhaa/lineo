@@ -117,6 +117,9 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .sechdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .sectitle{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .secsub{font-size:14px;color:var(--t2);margin-top:2px}
+.hbar-bg{background:var(--s2);border-radius:20px;height:10px;overflow:hidden}
+.hbar-fill{background:var(--accent);height:100%;border-radius:20px;transition:width .3s}
+.hbpct{font-size:20px;font-weight:700;color:var(--accent);min-width:52px;text-align:right}
 .empty{text-align:center;padding:48px 24px;color:var(--t3)}
 .emico{font-size:36px;margin-bottom:10px}
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
@@ -276,6 +279,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
     <div class="tab" onclick="goTab('calendario',this)">Calendario</div>
     <div class="tab" onclick="goTab('lembretes',this)">Lembretes</div>
     <div class="tab" onclick="goTab('busca',this)">Busca</div>
+    <div class="tab" onclick="goTab('habitos',this)">Habitos</div>
   </div>
   <div class="main">
 
@@ -286,6 +290,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <div id="stats" class="stats"></div>
       <div id="home-weather" style="margin-bottom:20px"></div>
       <div id="home-today" style="margin-bottom:20px"></div>
+      <div id="home-habits" style="margin-bottom:20px"></div>
       <div class="card" style="margin-bottom:20px;padding:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <div style="font-size:15px;font-weight:600;font-family:Lora,serif">Esta semana</div>
@@ -454,6 +459,28 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         </div>
       </div>
       <div id="sresults"></div>
+    </div>
+
+    <div id="page-habitos" class="page">
+      <div class="sechdr">
+        <div><div class="sectitle">Habitos</div><div class="secsub">Acompanhe sua rotina diaria</div></div>
+        <button class="btn btn-p" onclick="openHabitModal()">+ Novo habito</button>
+      </div>
+      <div class="card" style="margin-bottom:20px;padding:20px">
+        <div class="calhdr" style="margin-bottom:20px">
+          <div class="calnav">
+            <button class="btn btn-s sm" onclick="chHabitDay(-1)">Anterior</button>
+            <div class="calmth" id="hbday-lbl">-</div>
+            <button class="btn btn-s sm" onclick="chHabitDay(1)">Proximo</button>
+          </div>
+          <button class="btn btn-g sm" onclick="goHabitToday()">Hoje</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+          <div style="flex:1"><div class="hbar-bg"><div class="hbar-fill" id="hbar-fill" style="width:0%"></div></div></div>
+          <div class="hbpct" id="hbpct">0%</div>
+        </div>
+        <div id="hblist"></div>
+      </div>
     </div>
 
   </div>
@@ -639,6 +666,18 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
   </div>
 </div>
 
+<div class="moverlay" id="m-habit">
+  <div class="modal">
+    <div class="mhdr"><div class="mtitle" id="hbm-title">Novo habito</div><div class="mclose" onclick="closeM('m-habit')">&#10005;</div></div>
+    <input type="hidden" id="hbid">
+    <div class="fg"><label class="lbl">Nome do habito</label><input class="inp" id="hbname" placeholder="Ex: Treino, Leitura, Oracao..."><div class="errmsg" id="e-hbname"></div></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+      <button class="btn btn-s" onclick="closeM('m-habit')">Cancelar</button>
+      <button class="btn btn-p" onclick="saveHabit()">Salvar habito</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SURL = "https://zrcoktathgzpyzisjbre.supabase.co";
 const SKEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyY29rdGF0aGd6cHl6aXNqYnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NjI5MjAsImV4cCI6MjA5ODAzODkyMH0.umUN9-Y_e72vwuutkvC47YVjI6twfw4pAtQDjhMIw_w";
@@ -668,6 +707,7 @@ const db = createClient(SURL, SKEY, {
 
 var currentUser = null;
 var entries=[], tasks=[], events=[], reminders=[], dayNotes={};
+var habits=[], habitLogs=[], habitDay=null;
 var ePics=[], editPics=[], eTags=[];
 var calDate=new Date(), selDay=null;
 
@@ -764,6 +804,20 @@ async function loadAllData(){
   dayNotes={};
   dnArr.forEach(function(n){if(!dayNotes[n.date])dayNotes[n.date]=[];dayNotes[n.date].push(n)});
 
+  var r6=await db.from("habits").select("*").eq("user_id",uid).order("order_index",{ascending:true});
+  console.log("[Lineo] habits:", r6.error?"ERRO:"+r6.error.message:r6.data.length+" itens");
+  habits=r6.data||[];
+  if(!r6.error && !habits.length){
+    var hbDefaults=["Treino","Leitura","Oracao","Estudo","Devocional"];
+    var hbRows=hbDefaults.map(function(n,i){return {user_id:uid,name:n,order_index:i,active:true}});
+    var hbIns=await db.from("habits").insert(hbRows).select();
+    if(!hbIns.error)habits=hbIns.data||[];
+  }
+
+  var r7=await db.from("habit_logs").select("*").eq("user_id",uid);
+  console.log("[Lineo] habit_logs:", r7.error?"ERRO:"+r7.error.message:r7.data.length+" itens");
+  habitLogs=r7.data||[];
+
   showLoading(false);
   renderHome();renderStats();renderCal();renderReminders();
   loadScratchHistory();
@@ -800,6 +854,7 @@ db.auth.onAuthStateChange(function(event,session){
   if(event==="SIGNED_OUT"){
     appReady=false;currentUser=null;
     entries=[];tasks=[];events=[];reminders=[];dayNotes={};scratchHistory=[];
+    habits=[];habitLogs=[];
     showLoading(false);showAuth();
   }
 });
@@ -816,6 +871,7 @@ function goTab(id,el){
   if(id==="calendario")renderCal();
   if(id==="lembretes")renderReminders();
   if(id==="notas"){loadScratchHistory();}
+  if(id==="habitos"){renderHabits();}
 }
 function goHome(){
   document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("active")});
@@ -842,6 +898,7 @@ function renderHome(){
   renderHomeWeek();
   renderHomeTasks();
   renderProductivity();
+  renderHomeHabits();
 }
 function renderHomeToday(){
   var el=document.getElementById("home-today");
@@ -1966,6 +2023,154 @@ function renderTasks(){
       "</div></div>";
   }
   el.innerHTML=html;
+}
+
+// ===== HABITS =====
+var HMN=["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+var HDN=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
+function todayHabitDate(){return habitDay||todayStr()}
+function chHabitDay(d){
+  var base=new Date(todayHabitDate()+"T00:00:00");
+  base.setDate(base.getDate()+d);
+  habitDay=base.getFullYear()+"-"+pad(base.getMonth()+1)+"-"+pad(base.getDate());
+  renderHabits();
+}
+function goHabitToday(){habitDay=null;renderHabits();}
+function habitLogFor(habitId,date){
+  return habitLogs.find(function(l){return l.habit_id===habitId&&l.date===date});
+}
+async function toggleHabitLog(habitId){
+  var date=todayHabitDate();
+  var log=habitLogFor(habitId,date);
+  var uid=currentUser.id;
+  if(log){
+    log.done=!log.done;
+    await db.from("habit_logs").update({done:log.done}).eq("id",log.id).eq("user_id",uid);
+  } else {
+    var row={user_id:uid,habit_id:habitId,date:date,done:true};
+    var res=await db.from("habit_logs").insert(row).select();
+    if(!res.error&&res.data&&res.data[0])habitLogs.push(res.data[0]);
+  }
+  renderHabits();
+  renderHomeHabits();
+}
+function renderHabits(){
+  var date=todayHabitDate();
+  var lbl=document.getElementById("hbday-lbl");
+  if(lbl){
+    var d=new Date(date+"T00:00:00");
+    var isToday=date===todayStr();
+    lbl.textContent=(isToday?"Hoje - ":"")+HDN[d.getDay()]+", "+d.getDate()+" de "+HMN[d.getMonth()];
+  }
+  var active=habits.filter(function(h){return h.active!==false});
+  var el=document.getElementById("hblist");
+  if(!el)return;
+  var fillEl=document.getElementById("hbar-fill"), pctEl=document.getElementById("hbpct");
+  if(!active.length){
+    el.innerHTML='<div class="empty"><div class="emico">&#10024;</div><div class="emtitle">Nenhum habito cadastrado</div><div>Adicione clicando em "+ Novo habito".</div></div>';
+    if(fillEl)fillEl.style.width="0%";
+    if(pctEl)pctEl.textContent="0%";
+    return;
+  }
+  var done=0;
+  var html="";
+  for(var i=0;i<active.length;i++){
+    var h=active[i];
+    var log=habitLogFor(h.id,date);
+    var isDone=!!(log&&log.done);
+    if(isDone)done++;
+    html+='<div class="titem'+(isDone?" done":"")+'">'+
+      '<div class="tchk'+(isDone?" chk":"")+'" data-id="'+h.id+'" onclick="toggleHabitLog(this.getAttribute(\'data-id\'))"></div>'+
+      '<div style="flex:1"><div class="ttxt">'+esc(h.name)+"</div></div>"+
+      '<div style="display:flex;gap:4px">'+
+      '<button class="ibtn" data-id="'+h.id+'" onclick="editHabit(this.getAttribute(\'data-id\'))">&#9999;</button>'+
+      '<button class="ibtn red" data-id="'+h.id+'" onclick="delHabit(this.getAttribute(\'data-id\'))">&#128465;</button>'+
+      "</div></div>";
+  }
+  el.innerHTML=html;
+  var pct=active.length?Math.round(done/active.length*100):0;
+  if(fillEl)fillEl.style.width=pct+"%";
+  if(pctEl)pctEl.textContent=pct+"%";
+}
+function renderHomeHabits(){
+  var el=document.getElementById("home-habits");
+  if(!el)return;
+  var active=habits.filter(function(h){return h.active!==false});
+  if(!active.length){el.innerHTML="";return;}
+  var date=todayStr();
+  var done=0;
+  var rows="";
+  for(var i=0;i<active.length;i++){
+    var h=active[i];
+    var log=habitLogFor(h.id,date);
+    var isDone=!!(log&&log.done);
+    if(isDone)done++;
+    rows+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0'+(i<active.length-1?';border-bottom:1px solid var(--border)':"")+'">'+
+      '<div class="tchk'+(isDone?" chk":"")+'" data-id="'+h.id+'" onclick="toggleHabitLog(this.getAttribute(\'data-id\'))" style="margin-top:0"></div>'+
+      '<div style="flex:1;font-size:14px'+(isDone?";color:var(--t3);text-decoration:line-through":"")+'">'+esc(h.name)+"</div>"+
+      "</div>";
+  }
+  var pct=active.length?Math.round(done/active.length*100):0;
+  el.innerHTML='<div class="card" style="padding:20px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+    '<div style="font-size:15px;font-weight:600;font-family:Lora,serif">Habitos de hoje</div>'+
+    '<div style="display:flex;align-items:center;gap:10px">'+
+    '<span style="font-size:13px;font-weight:600;color:var(--accent)">'+pct+"%</span>"+
+    '<button class="btn btn-g sm" onclick="goHabitosTab()">Ver tudo &#8594;</button>'+
+    "</div></div>"+
+    '<div class="hbar-bg" style="margin-bottom:8px"><div class="hbar-fill" style="width:'+pct+'%"></div></div>'+
+    rows+
+    "</div>";
+}
+function goHabitosTab(){
+  var tabs=document.querySelectorAll(".tab");
+  goTab("habitos",tabs[tabs.length-1]);
+}
+function openHabitModal(){
+  document.getElementById("hbid").value="";
+  document.getElementById("hbname").value="";
+  document.getElementById("hbm-title").textContent="Novo habito";
+  document.getElementById("e-hbname").textContent="";
+  openM("m-habit");
+}
+function editHabit(id){
+  var h=habits.find(function(x){return x.id===id});
+  if(!h)return;
+  document.getElementById("hbid").value=h.id;
+  document.getElementById("hbname").value=h.name;
+  document.getElementById("hbm-title").textContent="Editar habito";
+  document.getElementById("e-hbname").textContent="";
+  openM("m-habit");
+}
+async function saveHabit(){
+  var id=document.getElementById("hbid").value;
+  var name=document.getElementById("hbname").value.trim();
+  var errEl=document.getElementById("e-hbname");
+  if(!name){errEl.textContent="Informe um nome";return;}
+  errEl.textContent="";
+  var uid=currentUser.id;
+  if(id){
+    var h=habits.find(function(x){return x.id===id});
+    if(h)h.name=name;
+    await db.from("habits").update({name:name}).eq("id",id).eq("user_id",uid);
+  } else {
+    var order=habits.length;
+    var row={user_id:uid,name:name,order_index:order,active:true};
+    var res=await db.from("habits").insert(row).select();
+    if(!res.error&&res.data&&res.data[0])habits.push(res.data[0]);
+  }
+  closeM("m-habit");
+  renderHabits();
+  renderHomeHabits();
+}
+async function delHabit(id){
+  if(!confirm("Remover este habito? O historico sera mantido, mas ele deixara de aparecer na lista."))return;
+  var uid=currentUser.id;
+  await db.from("habits").update({active:false}).eq("id",id).eq("user_id",uid);
+  var h=habits.find(function(x){return x.id===id});
+  if(h)h.active=false;
+  renderHabits();
+  renderHomeHabits();
 }
 
 // ===== CALENDAR =====
