@@ -124,8 +124,6 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .hbhandle:active{cursor:grabbing}
 .hbstat-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .hbstat-row:last-child{border-bottom:none}
-.hbstat-badges{display:flex;gap:8px;flex-wrap:wrap}
-.hbstat-badge{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--s2);color:var(--t2)}
 .empty{text-align:center;padding:48px 24px;color:var(--t3)}
 .emico{font-size:36px;margin-bottom:10px}
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
@@ -505,8 +503,17 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         </div>
       </div>
       <div class="card" style="padding:20px">
-        <div style="font-size:15px;font-weight:600;font-family:Lora,serif;margin-bottom:2px">Desempenho por habito</div>
-        <div class="secsub" style="margin-bottom:8px">Percentual de conclusao em cada periodo</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <div>
+            <div style="font-size:15px;font-weight:600;font-family:Lora,serif">Desempenho por habito</div>
+            <div class="secsub">Percentual de conclusao no periodo selecionado</div>
+          </div>
+          <div style="display:flex;gap:4px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;flex-shrink:0">
+            <button id="hbp-7" class="btn sm" onclick="setHabitStatPeriod(7)" style="border:none;border-radius:0;background:var(--accent);color:#fff;padding:8px 14px">Semana</button>
+            <button id="hbp-15" class="btn sm" onclick="setHabitStatPeriod(15)" style="border:none;border-radius:0;background:transparent;color:var(--t2);padding:8px 14px">Quinzena</button>
+            <button id="hbp-30" class="btn sm" onclick="setHabitStatPeriod(30)" style="border:none;border-radius:0;background:transparent;color:var(--t2);padding:8px 14px">Mes</button>
+          </div>
+        </div>
         <div id="hbstats"></div>
       </div>
     </div>
@@ -2058,6 +2065,7 @@ var HMN=["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","
 var HDN=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
 var habitView="day";
 var habitMonthDate=new Date();
+var habitStatPeriod=7;
 var hbDrag={active:false,idx:null};
 function todayHabitDate(){return habitDay||todayStr()}
 function habitLogFor(habitId,date){
@@ -2244,6 +2252,17 @@ function habitPercentForWindow(habit,windowDays){
   }
   return Math.round(done/applicable*100);
 }
+function setHabitStatPeriod(days){
+  habitStatPeriod=days;
+  [7,15,30].forEach(function(k){
+    var btn=document.getElementById("hbp-"+k);
+    if(!btn)return;
+    var active=k===days;
+    btn.style.background=active?"var(--accent)":"transparent";
+    btn.style.color=active?"#fff":"var(--t2)";
+  });
+  renderHabitStats();
+}
 function renderHabitStats(){
   var el=document.getElementById("hbstats");
   if(!el)return;
@@ -2255,15 +2274,14 @@ function renderHabitStats(){
   var html="";
   for(var i=0;i<active.length;i++){
     var h=active[i];
-    var p7=habitPercentForWindow(h,7);
-    var p15=habitPercentForWindow(h,15);
-    var p30=habitPercentForWindow(h,30);
-    html+='<div class="hbstat-row"><div style="font-weight:500">'+esc(h.name)+"</div>"+
-      '<div class="hbstat-badges">'+
-      '<span class="hbstat-badge">Semana: '+p7+"%</span>"+
-      '<span class="hbstat-badge">Quinzena: '+p15+"%</span>"+
-      '<span class="hbstat-badge">Mes: '+p30+"%</span>"+
-      "</div></div>";
+    var pct=habitPercentForWindow(h,habitStatPeriod);
+    html+='<div class="hbstat-row">'+
+      '<div style="flex:1;min-width:0">'+
+      '<div style="font-weight:500;margin-bottom:6px">'+esc(h.name)+"</div>"+
+      '<div class="hbar-bg"><div class="hbar-fill" style="width:'+pct+'%"></div></div>'+
+      "</div>"+
+      '<div class="hbpct" style="margin-left:16px">'+pct+"%</div>"+
+      "</div>";
   }
   el.innerHTML=html;
 }
