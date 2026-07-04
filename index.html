@@ -125,6 +125,9 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .hbstat-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .hbstat-row:last-child{border-bottom:none}
 .empty{text-align:center;padding:48px 24px;color:var(--t3)}
+.ntodo{display:flex;align-items:flex-start;gap:8px;margin:2px 0}
+.ntodo-box{cursor:pointer;flex-shrink:0;font-size:16px;line-height:1.4;user-select:none}
+.ntodo.ntodo-done{color:var(--t3);text-decoration:line-through}
 .emico{font-size:36px;margin-bottom:10px}
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
 .fmtbar{display:flex;gap:4px;padding:8px;background:var(--s2);border-radius:var(--r);margin-bottom:8px;flex-wrap:wrap;align-items:center}
@@ -341,6 +344,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
                 <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('underline')"><u>S</u></button>
                 <div class="fsep"></div>
                 <button class="fmtbtn" onclick="document.getElementById('ned').focus();document.execCommand('insertUnorderedList')">&#8226; Lista</button>
+                <button class="fmtbtn" onclick="insertNoteChecklist()">&#9745; Check</button>
                 <div class="fsep"></div>
                 <button class="fmtbtn" id="note-pin-btn" onclick="toggleNotePin()" title="Fixar nota">&#128204;</button>
               </div>
@@ -1730,6 +1734,22 @@ function openNote(id){
 function onNoteTitleInput(){
   document.getElementById("nsaved").textContent="Nao salvo...";
 }
+function insertNoteChecklist(){
+  var ned=document.getElementById("ned");
+  ned.focus();
+  document.execCommand("insertHTML",false,'<div class="ntodo"><span class="ntodo-box" contenteditable="false" onclick="toggleNoteCheck(this)">&#9744;</span>&nbsp;</div>');
+  onNoteTitleInput();
+}
+function toggleNoteCheck(el){
+  var isChecked=el.textContent.indexOf("\u2611")>=0;
+  el.textContent=isChecked?"\u2610":"\u2611";
+  var line=el.parentNode;
+  if(line){
+    if(isChecked)line.classList.remove("ntodo-done");
+    else line.classList.add("ntodo-done");
+  }
+  onNoteTitleInput();
+}
 async function saveNotes(){
   var ned=document.getElementById("ned");
   var htmlContent=ned.innerHTML;
@@ -1926,6 +1946,21 @@ async function saveTask(){
   };
   showLoading(true);
   if(editId){
+    var origT=null;
+    for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){origT=tasks[i];break}}
+    var updateAll=false;
+    if(origT&&origT.recur_group){
+      updateAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = atualizar TODAS as ocorrencias\nCancelar = atualizar so esta");
+    }
+    if(updateAll){
+      var groupFields=Object.assign({},baseFields);
+      delete groupFields.due;
+      await db.from("tasks").update(groupFields).eq("recur_group",origT.recur_group).eq("user_id",currentUser.id);
+      tasks=tasks.map(function(x){
+        if(x.recur_group===origT.recur_group)return Object.assign({},x,groupFields);
+        return x;
+      });
+    } else {
     // Edição simples
     var existDone=false;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){existDone=tasks[i].done;break}}
@@ -1934,6 +1969,7 @@ async function saveTask(){
     var idx=-1;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){idx=i;break}}
     if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
+    }
   } else if(recur&&recurEnd&&baseFields.due){
     // Gerar série recorrente
     var dates=[baseFields.due];
@@ -1989,7 +2025,8 @@ async function toggleTask(id){
   for(var i=0;i<tasks.length;i++){
     if(tasks[i].id===id){
       tasks[i].done=!tasks[i].done;
-      await db.from("tasks").update({done:tasks[i].done}).eq("id",id).eq("user_id",currentUser.id);
+      tasks[i].completed_at=tasks[i].done?Date.now():null;
+      await db.from("tasks").update({done:tasks[i].done,completed_at:tasks[i].completed_at}).eq("id",id).eq("user_id",currentUser.id);
       break;
     }
   }
@@ -2001,13 +2038,19 @@ async function delTask(id){
   for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){t=tasks[i];break}}
   if(!t)return;
   if(t.recur_group){
-    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so esta");
+    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar TODA a serie\nCancelar = escolher outra opcao");
     if(delAll){
       await db.from("tasks").delete().eq("recur_group",t.recur_group).eq("user_id",currentUser.id);
       tasks=tasks.filter(function(x){return x.recur_group!==t.recur_group});
     } else {
-      await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
-      tasks=tasks.filter(function(x){return x.id!==id});
+      var delFwd=confirm("Apagar esta ocorrencia e todas as seguintes?\n\nOK = esta e as seguintes\nCancelar = apagar so esta");
+      if(delFwd){
+        await db.from("tasks").delete().eq("recur_group",t.recur_group).gte("due",t.due).eq("user_id",currentUser.id);
+        tasks=tasks.filter(function(x){return !(x.recur_group===t.recur_group&&x.due>=t.due)});
+      } else {
+        await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
+        tasks=tasks.filter(function(x){return x.id!==id});
+      }
     }
   } else {
     if(!confirm("Apagar esta tarefa?"))return;
@@ -2032,6 +2075,7 @@ function renderTasks(){
     return true;
   }).sort(function(a,b){
     if(a.done!==b.done)return a.done?1:-1;
+    if(a.done&&b.done)return (b.completed_at||0)-(a.completed_at||0);
     return (po[a.priority]||1)-(po[b.priority]||1);
   });
   var el=document.getElementById("tlist");
@@ -2045,8 +2089,7 @@ function renderTasks(){
     var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[t.priority]||"bm";
     html+='<div class="titem'+(t.done?" done":"")+'">'+
       '<div class="tchk'+(t.done?" chk":"")+'" data-id="'+t.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'))"></div>'+
-      '<div style="flex:1"><div class="ttxt">'+t.text+"</div>"+
-      '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">'+
+      '<div style="flex:1;cursor:pointer" onclick="editTask(\''+t.id+'\')"><div class="ttxt">'+t.text+"</div>"+
       '<span style="font-size:12px;color:var(--t3)">'+t.category+"</span>"+
       '<span class="badge '+pc+'">'+t.priority+"</span>"+
       (t.due?'<span style="font-size:12px;color:var(--t3)">&#128197; '+fmtDate(t.due)+"</span>":"")+
@@ -2392,9 +2435,15 @@ function renderCal(){
     var isT=today.getFullYear()===yr&&today.getMonth()===mo&&today.getDate()===d;
     var isS=ds===selDay;
     var pills="";
-    if(de.length)pills+='<div class="pill pe">&#128197; '+de[0].title+"</div>";
-    if(dt.length)pills+='<div class="pill pt">&#9989; '+dt[0].text+"</div>";
-    if(dr.length)pills+='<div class="pill pr">&#128214; '+dr[0].title+"</div>";
+    var citems=[];
+    de.forEach(function(x){citems.push({cls:"pe",icon:"&#128197;",label:x.title})});
+    dt.forEach(function(x){citems.push({cls:"pt",icon:"&#9989;",label:x.text})});
+    dr.forEach(function(x){citems.push({cls:"pr",icon:"&#128214;",label:x.title})});
+    var cmax=4;
+    for(var k=0;k<Math.min(citems.length,cmax);k++){
+      pills+='<div class="pill '+citems[k].cls+'">'+citems[k].icon+" "+esc(citems[k].label)+"</div>";
+    }
+    if(citems.length>cmax)pills+='<div class="pill" style="background:var(--s2);color:var(--t2)">+'+(citems.length-cmax)+" mais</div>";
     if(dn.length)pills+='<div class="pill pn">&#128221; '+dn.length+" anot."+"</div>";
     html+='<div class="calday'+(isT?" today":"")+(isS?" selday":"")+'" data-ds="'+ds+'" onclick="openDayPanel(this.getAttribute(\'data-ds\'))">'+
       '<div class="calnum" style="'+(isT?"color:var(--accent);font-weight:700":"")+'">'+(d)+"</div>"+pills+"</div>";
@@ -2483,7 +2532,7 @@ function renderDayTasks(ds){
     var x=t[i];var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[x.priority]||"bm";
     html+='<div class="titem'+(x.done?" done":"")+'" style="margin-bottom:8px">'+
       '<div class="tchk'+(x.done?" chk":"")+'" data-id="'+x.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'));renderDayTasks(\''+ds+'\')"></div>'+
-      '<div style="flex:1"><div class="ttxt">'+x.text+"</div>"+
+      '<div style="flex:1;cursor:pointer" onclick="editTask(\''+x.id+'\')"><div class="ttxt">'+x.text+"</div>"+
       '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+x.category+"</span>"+
       '<span class="badge '+pc+'">'+x.priority+"</span></div></div>"+
       '<div style="display:flex;gap:4px;flex-shrink:0">'+
@@ -2631,12 +2680,26 @@ async function saveEvent(){
   };
 
   if(editId){
+    var origEv=null;
+    for(var i=0;i<events.length;i++){if(events[i].id===editId){origEv=events[i];break}}
+    var updateAllEv=false;
+    if(origEv&&origEv.recur_group){
+      updateAllEv=confirm("Este evento faz parte de uma serie recorrente.\n\nOK = atualizar TODAS as ocorrencias\nCancelar = atualizar so este");
+    }
+    if(updateAllEv){
+      await db.from("events").update(baseFields).eq("recur_group",origEv.recur_group).eq("user_id",currentUser.id);
+      events=events.map(function(e){
+        if(e.recur_group===origEv.recur_group)return Object.assign({},e,baseFields);
+        return e;
+      });
+    } else {
     // Edicao simples — sem recorrencia
     var row=Object.assign({id:editId,user_id:currentUser.id,date:date},baseFields);
     await db.from("events").upsert(row);
     var idx=-1;
     for(var i=0;i<events.length;i++){if(events[i].id===editId){idx=i;break}}
     if(idx>=0)events[idx]=row;else events.push(row);
+    }
   } else if(recur&&recurEnd){
     // Gerar serie de eventos recorrentes
     var dates=[date];
@@ -2676,13 +2739,19 @@ async function delEvent(id){
   for(var i=0;i<events.length;i++){if(events[i].id===id){ev=events[i];break}}
   if(!ev)return;
   if(ev.recur_group){
-    var delAll=confirm("Este evento faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so este evento");
-    if(delAll){
+    var delAllEv=confirm("Este evento faz parte de uma serie recorrente.\n\nOK = apagar TODA a serie\nCancelar = escolher outra opcao");
+    if(delAllEv){
       await db.from("events").delete().eq("recur_group",ev.recur_group).eq("user_id",currentUser.id);
       events=events.filter(function(e){return e.recur_group!==ev.recur_group});
     } else {
-      await db.from("events").delete().eq("id",id).eq("user_id",currentUser.id);
-      events=events.filter(function(e){return e.id!==id});
+      var delFwdEv=confirm("Apagar este evento e todos os seguintes?\n\nOK = este e os seguintes\nCancelar = apagar so este");
+      if(delFwdEv){
+        await db.from("events").delete().eq("recur_group",ev.recur_group).gte("date",ev.date).eq("user_id",currentUser.id);
+        events=events.filter(function(e){return !(e.recur_group===ev.recur_group&&e.date>=ev.date)});
+      } else {
+        await db.from("events").delete().eq("id",id).eq("user_id",currentUser.id);
+        events=events.filter(function(e){return e.id!==id});
+      }
     }
   } else {
     if(!confirm("Apagar este evento?"))return;
