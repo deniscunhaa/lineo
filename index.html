@@ -2090,6 +2090,7 @@ function renderTasks(){
     html+='<div class="titem'+(t.done?" done":"")+'">'+
       '<div class="tchk'+(t.done?" chk":"")+'" data-id="'+t.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'))"></div>'+
       '<div style="flex:1;cursor:pointer" onclick="editTask(\''+t.id+'\')"><div class="ttxt">'+t.text+"</div>"+
+      '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">'+
       '<span style="font-size:12px;color:var(--t3)">'+t.category+"</span>"+
       '<span class="badge '+pc+'">'+t.priority+"</span>"+
       (t.due?'<span style="font-size:12px;color:var(--t3)">&#128197; '+fmtDate(t.due)+"</span>":"")+
