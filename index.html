@@ -1737,7 +1737,33 @@ function onNoteTitleInput(){
 function insertNoteChecklist(){
   var ned=document.getElementById("ned");
   ned.focus();
-  document.execCommand("insertHTML",false,'<div class="ntodo"><span class="ntodo-box" contenteditable="false" onclick="toggleNoteCheck(this)">&#9744;</span>&nbsp;</div>');
+  var sel=window.getSelection();
+  var range=null;
+  if(sel&&sel.rangeCount>0){
+    var r=sel.getRangeAt(0);
+    if(ned.contains(r.commonAncestorContainer))range=r;
+  }
+  if(!range){
+    range=document.createRange();
+    range.selectNodeContents(ned);
+    range.collapse(false);
+  }
+  var line=document.createElement("div");
+  line.className="ntodo";
+  var box=document.createElement("span");
+  box.className="ntodo-box";
+  box.setAttribute("contenteditable","false");
+  box.setAttribute("onclick","toggleNoteCheck(this)");
+  box.innerHTML="&#9744;";
+  line.appendChild(box);
+  line.appendChild(document.createTextNode("\u00A0"));
+  range.deleteContents();
+  range.insertNode(line);
+  var after=document.createRange();
+  after.setStartAfter(line);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
   onNoteTitleInput();
 }
 function toggleNoteCheck(el){
@@ -1946,21 +1972,6 @@ async function saveTask(){
   };
   showLoading(true);
   if(editId){
-    var origT=null;
-    for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){origT=tasks[i];break}}
-    var updateAll=false;
-    if(origT&&origT.recur_group){
-      updateAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = atualizar TODAS as ocorrencias\nCancelar = atualizar so esta");
-    }
-    if(updateAll){
-      var groupFields=Object.assign({},baseFields);
-      delete groupFields.due;
-      await db.from("tasks").update(groupFields).eq("recur_group",origT.recur_group).eq("user_id",currentUser.id);
-      tasks=tasks.map(function(x){
-        if(x.recur_group===origT.recur_group)return Object.assign({},x,groupFields);
-        return x;
-      });
-    } else {
     // Edição simples
     var existDone=false;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){existDone=tasks[i].done;break}}
@@ -1969,7 +1980,6 @@ async function saveTask(){
     var idx=-1;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){idx=i;break}}
     if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
-    }
   } else if(recur&&recurEnd&&baseFields.due){
     // Gerar série recorrente
     var dates=[baseFields.due];
@@ -2025,8 +2035,7 @@ async function toggleTask(id){
   for(var i=0;i<tasks.length;i++){
     if(tasks[i].id===id){
       tasks[i].done=!tasks[i].done;
-      tasks[i].completed_at=tasks[i].done?Date.now():null;
-      await db.from("tasks").update({done:tasks[i].done,completed_at:tasks[i].completed_at}).eq("id",id).eq("user_id",currentUser.id);
+      await db.from("tasks").update({done:tasks[i].done}).eq("id",id).eq("user_id",currentUser.id);
       break;
     }
   }
@@ -2038,19 +2047,13 @@ async function delTask(id){
   for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){t=tasks[i];break}}
   if(!t)return;
   if(t.recur_group){
-    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar TODA a serie\nCancelar = escolher outra opcao");
+    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so esta");
     if(delAll){
       await db.from("tasks").delete().eq("recur_group",t.recur_group).eq("user_id",currentUser.id);
       tasks=tasks.filter(function(x){return x.recur_group!==t.recur_group});
     } else {
-      var delFwd=confirm("Apagar esta ocorrencia e todas as seguintes?\n\nOK = esta e as seguintes\nCancelar = apagar so esta");
-      if(delFwd){
-        await db.from("tasks").delete().eq("recur_group",t.recur_group).gte("due",t.due).eq("user_id",currentUser.id);
-        tasks=tasks.filter(function(x){return !(x.recur_group===t.recur_group&&x.due>=t.due)});
-      } else {
-        await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
-        tasks=tasks.filter(function(x){return x.id!==id});
-      }
+      await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
+      tasks=tasks.filter(function(x){return x.id!==id});
     }
   } else {
     if(!confirm("Apagar esta tarefa?"))return;
@@ -2075,7 +2078,6 @@ function renderTasks(){
     return true;
   }).sort(function(a,b){
     if(a.done!==b.done)return a.done?1:-1;
-    if(a.done&&b.done)return (b.completed_at||0)-(a.completed_at||0);
     return (po[a.priority]||1)-(po[b.priority]||1);
   });
   var el=document.getElementById("tlist");
@@ -2089,7 +2091,7 @@ function renderTasks(){
     var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[t.priority]||"bm";
     html+='<div class="titem'+(t.done?" done":"")+'">'+
       '<div class="tchk'+(t.done?" chk":"")+'" data-id="'+t.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'))"></div>'+
-      '<div style="flex:1;cursor:pointer" onclick="editTask(\''+t.id+'\')"><div class="ttxt">'+t.text+"</div>"+
+      '<div style="flex:1"><div class="ttxt">'+t.text+"</div>"+
       '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">'+
       '<span style="font-size:12px;color:var(--t3)">'+t.category+"</span>"+
       '<span class="badge '+pc+'">'+t.priority+"</span>"+
@@ -2533,7 +2535,7 @@ function renderDayTasks(ds){
     var x=t[i];var pc={Alta:"bh",Media:"bm",Baixa:"bl"}[x.priority]||"bm";
     html+='<div class="titem'+(x.done?" done":"")+'" style="margin-bottom:8px">'+
       '<div class="tchk'+(x.done?" chk":"")+'" data-id="'+x.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'));renderDayTasks(\''+ds+'\')"></div>'+
-      '<div style="flex:1;cursor:pointer" onclick="editTask(\''+x.id+'\')"><div class="ttxt">'+x.text+"</div>"+
+      '<div style="flex:1"><div class="ttxt">'+x.text+"</div>"+
       '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+x.category+"</span>"+
       '<span class="badge '+pc+'">'+x.priority+"</span></div></div>"+
       '<div style="display:flex;gap:4px;flex-shrink:0">'+
