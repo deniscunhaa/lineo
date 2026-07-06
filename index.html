@@ -86,7 +86,7 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .calmth{font-size:18px;font-weight:600;min-width:180px;text-align:center}
 .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .caldh{text-align:center;font-size:12px;font-weight:600;color:var(--t3);padding:8px 0;text-transform:uppercase;letter-spacing:.5px}
-.calday{min-height:94px;border:1px solid var(--border);border-radius:var(--r);padding:6px;cursor:pointer;transition:.2s;background:var(--surface)}
+.calday{min-height:94px;min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--r);padding:6px;cursor:pointer;transition:.2s;background:var(--surface)}
 .calday:hover{border-color:var(--accent);background:var(--al)}
 .calday.today{border-color:var(--accent);background:var(--al)}
 .calday.other{background:var(--s2);opacity:.4;cursor:default;pointer-events:none}
@@ -128,6 +128,8 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
 .ntodo{display:flex;align-items:flex-start;gap:8px;margin:2px 0}
 .ntodo-box{cursor:pointer;flex-shrink:0;font-size:16px;line-height:1.4;user-select:none}
 .ntodo.ntodo-done{color:var(--t3);text-decoration:line-through}
+.wdbtn{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--t2);transition:.15s;user-select:none}
+.wdbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .emico{font-size:36px;margin-bottom:10px}
 .emtitle{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:4px}
 .fmtbar{display:flex;gap:4px;padding:8px;background:var(--s2);border-radius:var(--r);margin-bottom:8px;flex-wrap:wrap;align-items:center}
@@ -652,7 +654,21 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         <option value="weekdays">Dias uteis (Seg-Sex)</option>
         <option value="weekly">Semanalmente</option>
         <option value="monthly">Mensalmente</option>
+        <option value="custom">Personalizado (escolher dias)</option>
       </select>
+    </div>
+    <div class="fg" id="evrecur-custom-wrap" style="display:none">
+      <label class="lbl">Repetir nos dias</label>
+      <div id="evrecur-days" style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="wdbtn" data-day="0" onclick="toggleEvRecurDay(0,this)">D</div>
+        <div class="wdbtn" data-day="1" onclick="toggleEvRecurDay(1,this)">S</div>
+        <div class="wdbtn" data-day="2" onclick="toggleEvRecurDay(2,this)">T</div>
+        <div class="wdbtn" data-day="3" onclick="toggleEvRecurDay(3,this)">Q</div>
+        <div class="wdbtn" data-day="4" onclick="toggleEvRecurDay(4,this)">Q</div>
+        <div class="wdbtn" data-day="5" onclick="toggleEvRecurDay(5,this)">S</div>
+        <div class="wdbtn" data-day="6" onclick="toggleEvRecurDay(6,this)">S</div>
+      </div>
+      <input type="hidden" id="evrecur_days_val" value="">
     </div>
     <div class="fg" id="evrecur-end-wrap" style="display:none">
       <label class="lbl">Repetir ate</label>
@@ -1312,6 +1328,8 @@ function renderHomeWeek(){
     return;
   }
   var mn2=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  var totalUp=upcoming.length;
+  upcoming=upcoming.slice(0,5);
   var ehtml="<div style=\"font-size:12px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px\">Proximos eventos</div>";
   for(var i=0;i<upcoming.length;i++){
     var u=upcoming[i];
@@ -1321,6 +1339,7 @@ function renderHomeWeek(){
       "<div style=\"width:3px;height:32px;border-radius:2px;background:var(--accent);flex-shrink:0\"></div>"+
       "<div style=\"flex:1\"><div style=\"font-size:14px;font-weight:500\">"+u.ev.title+"</div><div style=\"font-size:12px;color:var(--t2);margin-top:1px\">"+tRange+"</div></div></div>";
   }
+  if(totalUp>upcoming.length)ehtml+="<div style=\"font-size:12px;color:var(--t3);text-align:center;padding:6px 0\">+"+(totalUp-upcoming.length)+" mais esta semana</div>";
   if(ev)ev.innerHTML=ehtml;
 }
 function renderHomeTasks(){
@@ -2613,6 +2632,8 @@ function openEventModal(ds){
   document.getElementById("evrecur").value="";
   document.getElementById("evrecur_end").value="";
   document.getElementById("evrecur-end-wrap").style.display="none";
+  document.getElementById("evrecur-custom-wrap").style.display="none";
+  setEvRecurDays([]);
   selectEvColor("#2A9D7C");
   document.getElementById("evm-title").textContent="Novo evento";
   buildTimeSuggestions();
@@ -2633,6 +2654,8 @@ function editEvent(id){
   document.getElementById("evrecur").value="";
   document.getElementById("evrecur_end").value="";
   document.getElementById("evrecur-end-wrap").style.display="none";
+  document.getElementById("evrecur-custom-wrap").style.display="none";
+  setEvRecurDays([]);
   selectEvColor(ev.color||"#2A9D7C");
   document.getElementById("evm-title").textContent="Editar evento";
   buildTimeSuggestions();
@@ -2647,6 +2670,32 @@ function selectEvColor(c){
 function toggleRecurEnd(){
   var v=document.getElementById("evrecur").value;
   document.getElementById("evrecur-end-wrap").style.display=v?"block":"none";
+  var customWrap=document.getElementById("evrecur-custom-wrap");
+  if(v==="custom"){
+    customWrap.style.display="block";
+    var cur=document.getElementById("evrecur_days_val").value;
+    if(!cur){
+      var ds=document.getElementById("evdate").value||todayStr();
+      var dow=new Date(ds+"T12:00:00").getDay();
+      setEvRecurDays([dow]);
+    }
+  } else {
+    customWrap.style.display="none";
+  }
+}
+function setEvRecurDays(arr){
+  document.getElementById("evrecur_days_val").value=arr.join(",");
+  document.querySelectorAll("#evrecur-days .wdbtn").forEach(function(b){
+    var d=parseInt(b.getAttribute("data-day"),10);
+    b.classList.toggle("on",arr.indexOf(d)>=0);
+  });
+}
+function toggleEvRecurDay(idx,btn){
+  var cur=document.getElementById("evrecur_days_val").value;
+  var arr=cur?cur.split(",").map(function(x){return parseInt(x,10)}):[];
+  var pos=arr.indexOf(idx);
+  if(pos>=0)arr.splice(pos,1);else arr.push(idx);
+  setEvRecurDays(arr);
 }
 function addDays(dateStr,n){
   var d=new Date(dateStr+"T12:00:00");
@@ -2662,6 +2711,12 @@ function nextWeekday(dateStr){
   // Avança para o próximo dia útil (Seg-Sex)
   var d=new Date(dateStr+"T12:00:00");
   do{d.setDate(d.getDate()+1)}while(d.getDay()===0||d.getDay()===6);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function nextCustomDay(dateStr,daysSet){
+  var d=new Date(dateStr+"T12:00:00");
+  if(!daysSet||!daysSet.length)return addDays(dateStr,1);
+  do{d.setDate(d.getDate()+1)}while(daysSet.indexOf(d.getDay())<0);
   return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 }
 async function saveEvent(){
@@ -2705,6 +2760,7 @@ async function saveEvent(){
     }
   } else if(recur&&recurEnd){
     // Gerar serie de eventos recorrentes
+    var customDays=recur==="custom"?(document.getElementById("evrecur_days_val").value||"").split(",").filter(function(s){return s!==""}).map(function(x){return parseInt(x,10)}):null;
     var dates=[date];
     var cur=date;
     var safety=0;
@@ -2714,6 +2770,7 @@ async function saveEvent(){
       else if(recur==="weekdays")cur=nextWeekday(cur);
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
+      else if(recur==="custom")cur=nextCustomDay(cur,customDays);
       if(cur>recurEnd)break;
       dates.push(cur);
     }
