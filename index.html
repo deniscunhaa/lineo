@@ -671,8 +671,8 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       <input type="hidden" id="evrecur_days_val" value="">
     </div>
     <div class="fg" id="evrecur-end-wrap" style="display:none">
-      <label class="lbl">Repetir ate</label>
-      <input class="inp" type="date" id="evrecur_end" style="width:100%;min-width:0;box-sizing:border-box">
+      <label class="lbl">Repetir ate (opcional)</label>
+      <input class="inp" type="date" id="evrecur_end" style="width:100%;min-width:0;box-sizing:border-box" placeholder="Deixe em branco para repetir por 1 ano">
     </div>
     <div class="fg"><label class="lbl">Local</label><input class="inp" id="evlocal" placeholder="Endereco ou nome do lugar" style="width:100%"></div>
     <div class="fg"><label class="lbl">Descricao</label><textarea class="inp" id="evdesc" placeholder="Detalhes opcionais..." style="min-height:72px;resize:vertical;width:100%"></textarea></div>
@@ -2758,9 +2758,10 @@ async function saveEvent(){
     for(var i=0;i<events.length;i++){if(events[i].id===editId){idx=i;break}}
     if(idx>=0)events[idx]=row;else events.push(row);
     }
-  } else if(recur&&recurEnd){
+  } else if(recur){
     // Gerar serie de eventos recorrentes
     var customDays=recur==="custom"?(document.getElementById("evrecur_days_val").value||"").split(",").filter(function(s){return s!==""}).map(function(x){return parseInt(x,10)}):null;
+    var effRecurEnd=recurEnd||addDays(date,365);
     var dates=[date];
     var cur=date;
     var safety=0;
@@ -2771,7 +2772,7 @@ async function saveEvent(){
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
       else if(recur==="custom")cur=nextCustomDay(cur,customDays);
-      if(cur>recurEnd)break;
+      if(cur>effRecurEnd)break;
       dates.push(cur);
     }
     var groupId="rec"+Date.now();
