@@ -1484,7 +1484,9 @@ function renderTasksByDay(){
         '<div style="flex:1"><div class="ttxt">'+t.text+'</div>'+
         '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">'+
         '<span style="font-size:12px;color:var(--t3)">'+t.category+'</span>'+
-        '<span class="badge '+pc+'">'+t.priority+'</span></div></div>'+
+        '<span class="badge '+pc+'">'+t.priority+'</span>'+
+        (t.task_time?'<span style="font-size:12px;color:var(--t3)">&#128336; '+t.task_time+'</span>':'')+
+        '</div></div>'+
         '<div style="display:flex;gap:4px">'+
         '<button class="ibtn" data-id="'+t.id+'" onclick="editTask(this.getAttribute(\'data-id\'))">&#9999;</button>'+
         '<button class="ibtn red" data-id="'+t.id+'" onclick="delTask(this.getAttribute(\'data-id\'))">&#128465;</button>'+
@@ -1503,7 +1505,9 @@ function renderTasksByDay(){
         '<div style="flex:1"><div class="ttxt">'+t.text+'</div>'+
         '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">'+
         '<span style="font-size:12px;color:var(--t3)">'+t.category+'</span>'+
-        '<span class="badge '+pc+'">'+t.priority+'</span></div></div>'+
+        '<span class="badge '+pc+'">'+t.priority+'</span>'+
+        (t.task_time?'<span style="font-size:12px;color:var(--t3)">&#128336; '+t.task_time+'</span>':'')+
+        '</div></div>'+
         '<div style="display:flex;gap:4px">'+
         '<button class="ibtn" data-id="'+t.id+'" onclick="editTask(this.getAttribute(\'data-id\'))">&#9999;</button>'+
         '<button class="ibtn red" data-id="'+t.id+'" onclick="delTask(this.getAttribute(\'data-id\'))">&#128465;</button>'+
