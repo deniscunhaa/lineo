@@ -622,7 +622,21 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
         <option value="weekdays">Dias uteis (Seg-Sex)</option>
         <option value="weekly">Semanalmente</option>
         <option value="monthly">Mensalmente</option>
+        <option value="custom">Personalizado (escolher dias)</option>
       </select>
+    </div>
+    <div class="fg" id="trecur-custom-wrap" style="display:none">
+      <label class="lbl">Repetir nos dias</label>
+      <div id="trecur-days" style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="wdbtn" data-day="0" onclick="toggleTaskRecurDay(0,this)">D</div>
+        <div class="wdbtn" data-day="1" onclick="toggleTaskRecurDay(1,this)">S</div>
+        <div class="wdbtn" data-day="2" onclick="toggleTaskRecurDay(2,this)">T</div>
+        <div class="wdbtn" data-day="3" onclick="toggleTaskRecurDay(3,this)">Q</div>
+        <div class="wdbtn" data-day="4" onclick="toggleTaskRecurDay(4,this)">Q</div>
+        <div class="wdbtn" data-day="5" onclick="toggleTaskRecurDay(5,this)">S</div>
+        <div class="wdbtn" data-day="6" onclick="toggleTaskRecurDay(6,this)">S</div>
+      </div>
+      <input type="hidden" id="trecur_days_val" value="">
     </div>
     <div class="fg" id="trecur-end-wrap" style="display:none">
       <label class="lbl">Repetir ate (opcional)</label>
@@ -1998,12 +2012,40 @@ function openNewTask(ds){
   document.getElementById("trecur").value="";
   document.getElementById("trecur_end").value="";
   document.getElementById("trecur-end-wrap").style.display="none";
+  document.getElementById("trecur-custom-wrap").style.display="none";
+  setTaskRecurDays([]);
   document.getElementById("tm-title").textContent="Nova tarefa";
   clrErr(["ttxt"]);openM("m-task");
 }
 function toggleTaskRecurEnd(){
   var v=document.getElementById("trecur").value;
   document.getElementById("trecur-end-wrap").style.display=v?"block":"none";
+  var customWrap=document.getElementById("trecur-custom-wrap");
+  if(v==="custom"){
+    customWrap.style.display="block";
+    var cur=document.getElementById("trecur_days_val").value;
+    if(!cur){
+      var ds=document.getElementById("tdue").value||todayStr();
+      var dow=new Date(ds+"T12:00:00").getDay();
+      setTaskRecurDays([dow]);
+    }
+  } else {
+    customWrap.style.display="none";
+  }
+}
+function setTaskRecurDays(arr){
+  document.getElementById("trecur_days_val").value=arr.join(",");
+  document.querySelectorAll("#trecur-days .wdbtn").forEach(function(b){
+    var d=parseInt(b.getAttribute("data-day"),10);
+    b.classList.toggle("on",arr.indexOf(d)>=0);
+  });
+}
+function toggleTaskRecurDay(idx,btn){
+  var cur=document.getElementById("trecur_days_val").value;
+  var arr=cur?cur.split(",").map(function(x){return parseInt(x,10)}):[];
+  var pos=arr.indexOf(idx);
+  if(pos>=0)arr.splice(pos,1);else arr.push(idx);
+  setTaskRecurDays(arr);
 }
 async function saveTask(){
   var text=document.getElementById("ttxt").value.trim();
@@ -2023,6 +2065,21 @@ async function saveTask(){
   };
   showLoading(true);
   if(editId){
+    var origT=null;
+    for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){origT=tasks[i];break}}
+    var updateAll=false;
+    if(origT&&origT.recur_group){
+      updateAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = atualizar TODAS as ocorrencias\nCancelar = atualizar so esta");
+    }
+    if(updateAll){
+      var groupFields=Object.assign({},baseFields);
+      delete groupFields.due;
+      await db.from("tasks").update(groupFields).eq("recur_group",origT.recur_group).eq("user_id",currentUser.id);
+      tasks=tasks.map(function(x){
+        if(x.recur_group===origT.recur_group)return Object.assign({},x,groupFields);
+        return x;
+      });
+    } else {
     // Edição simples
     var existDone=false;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){existDone=tasks[i].done;break}}
@@ -2031,8 +2088,10 @@ async function saveTask(){
     var idx=-1;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){idx=i;break}}
     if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
+    }
   } else if(recur&&baseFields.due){
     // Gerar série recorrente
+    var taskCustomDays=recur==="custom"?(document.getElementById("trecur_days_val").value||"").split(",").filter(function(s){return s!==""}).map(function(x){return parseInt(x,10)}):null;
     var effRecurEnd=recurEnd||addDays(baseFields.due,365);
     var dates=[baseFields.due];
     var cur=baseFields.due;
@@ -2043,6 +2102,7 @@ async function saveTask(){
       else if(recur==="weekdays")cur=nextWeekday(cur);
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
+      else if(recur==="custom")cur=nextCustomDay(cur,taskCustomDays);
       if(cur>effRecurEnd)break;
       dates.push(cur);
     }
@@ -2080,6 +2140,8 @@ function editTask(id){
   document.getElementById("trecur").value="";
   document.getElementById("trecur_end").value="";
   document.getElementById("trecur-end-wrap").style.display="none";
+  document.getElementById("trecur-custom-wrap").style.display="none";
+  setTaskRecurDays([]);
   document.getElementById("tm-title").textContent="Editar tarefa";
   clrErr(["ttxt"]);openM("m-task");
 }
@@ -2099,13 +2161,19 @@ async function delTask(id){
   for(var i=0;i<tasks.length;i++){if(tasks[i].id===id){t=tasks[i];break}}
   if(!t)return;
   if(t.recur_group){
-    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar toda a serie\nCancelar = apagar so esta");
+    var delAll=confirm("Esta tarefa faz parte de uma serie recorrente.\n\nOK = apagar TODA a serie\nCancelar = escolher outra opcao");
     if(delAll){
       await db.from("tasks").delete().eq("recur_group",t.recur_group).eq("user_id",currentUser.id);
       tasks=tasks.filter(function(x){return x.recur_group!==t.recur_group});
     } else {
-      await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
-      tasks=tasks.filter(function(x){return x.id!==id});
+      var delFwd=confirm("Apagar esta ocorrencia e todas as seguintes?\n\nOK = esta e as seguintes\nCancelar = apagar so esta");
+      if(delFwd){
+        await db.from("tasks").delete().eq("recur_group",t.recur_group).gte("due",t.due).eq("user_id",currentUser.id);
+        tasks=tasks.filter(function(x){return !(x.recur_group===t.recur_group&&x.due>=t.due)});
+      } else {
+        await db.from("tasks").delete().eq("id",id).eq("user_id",currentUser.id);
+        tasks=tasks.filter(function(x){return x.id!==id});
+      }
     }
   } else {
     if(!confirm("Apagar esta tarefa?"))return;
@@ -2148,6 +2216,7 @@ function renderTasks(){
       '<span style="font-size:12px;color:var(--t3)">'+t.category+"</span>"+
       '<span class="badge '+pc+'">'+t.priority+"</span>"+
       (t.due?'<span style="font-size:12px;color:var(--t3)">&#128197; '+fmtDate(t.due)+"</span>":"")+
+      (t.task_time?'<span style="font-size:12px;color:var(--t3)">&#128336; '+t.task_time+"</span>":"")+
       "</div>"+(t.notes?'<div style="font-size:12px;color:var(--t3);margin-top:4px">'+t.notes+"</div>":"")+
       "</div>"+
       '<div style="display:flex;gap:4px">'+
@@ -2588,8 +2657,10 @@ function renderDayTasks(ds){
     html+='<div class="titem'+(x.done?" done":"")+'" style="margin-bottom:8px">'+
       '<div class="tchk'+(x.done?" chk":"")+'" data-id="'+x.id+'" onclick="toggleTask(this.getAttribute(\'data-id\'));renderDayTasks(\''+ds+'\')"></div>'+
       '<div style="flex:1"><div class="ttxt">'+x.text+"</div>"+
-      '<div style="display:flex;gap:8px;margin-top:4px"><span style="font-size:12px;color:var(--t3)">'+x.category+"</span>"+
-      '<span class="badge '+pc+'">'+x.priority+"</span></div></div>"+
+      '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center"><span style="font-size:12px;color:var(--t3)">'+x.category+"</span>"+
+      '<span class="badge '+pc+'">'+x.priority+"</span>"+
+      (x.task_time?'<span style="font-size:12px;color:var(--t3)">&#128336; '+x.task_time+"</span>":"")+
+      "</div></div>"+
       '<div style="display:flex;gap:4px;flex-shrink:0">'+
       '<button class="ibtn" data-id="'+x.id+'" onclick="editTask(this.getAttribute(\'data-id\'))">&#9999;</button>'+
       '<button class="ibtn red" data-id="'+x.id+'" onclick="delTask(this.getAttribute(\'data-id\'))">&#128465;</button>'+
