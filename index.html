@@ -1013,7 +1013,7 @@ function renderProductivity(){
   var weekDone=weekTasks.filter(function(t){return t.done}).length;
   var weekTotal=weekTasks.length;
   var overdue=tasks.filter(function(t){return !t.done&&t.due&&t.due<toDs(today)}).length;
-  var pending=tasks.filter(function(t){return !t.done}).length;
+  var pending=weekTasks.filter(function(t){return !t.done}).length;
   var rate=weekTotal>0?Math.round(weekDone/weekTotal*100):0;
 
   // Por categoria
