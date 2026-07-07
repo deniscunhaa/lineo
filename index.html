@@ -625,8 +625,8 @@ input,textarea,select{font-family:"Inter",sans-serif;font-size:15px;color:var(--
       </select>
     </div>
     <div class="fg" id="trecur-end-wrap" style="display:none">
-      <label class="lbl">Repetir ate</label>
-      <input class="inp" type="date" id="trecur_end" style="width:100%;min-width:0;box-sizing:border-box">
+      <label class="lbl">Repetir ate (opcional)</label>
+      <input class="inp" type="date" id="trecur_end" style="width:100%;min-width:0;box-sizing:border-box" placeholder="Deixe em branco para repetir por 1 ano">
     </div>
     <div class="fg"><label class="lbl">Observacoes</label><textarea class="inp" id="tnotes" placeholder="Detalhes adicionais..." style="min-height:80px;resize:vertical"></textarea></div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
@@ -1086,6 +1086,37 @@ async function initNotifications(){
     document.body.appendChild(btn);
   } else if(Notification.permission==="granted"){
     startNotifPolling();
+    subscribeToPush();
+  }
+}
+var VAPID_PUBLIC_KEY="BHQPK2wmx3N3TxZCdfGDZAhCdK10Wy6cs6guxd1lFp5eHoglGAtO-pvlnPAESNEz1Au6B3aWz65xAElJCmsmAcY";
+function urlBase64ToUint8Array(base64String){
+  var padding="=".repeat((4-base64String.length%4)%4);
+  var base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  var rawData=window.atob(base64);
+  var outputArray=new Uint8Array(rawData.length);
+  for(var i=0;i<rawData.length;i++)outputArray[i]=rawData.charCodeAt(i);
+  return outputArray;
+}
+async function subscribeToPush(){
+  if(!swRegistration||!("pushManager" in swRegistration))return;
+  if(!currentUser)return;
+  try{
+    var existing=await swRegistration.pushManager.getSubscription();
+    var sub=existing||await swRegistration.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    var json=sub.toJSON();
+    if(!json.endpoint||!json.keys)return;
+    await db.from("push_subscriptions").upsert({
+      user_id:currentUser.id,
+      endpoint:json.endpoint,
+      p256dh:json.keys.p256dh,
+      auth:json.keys.auth
+    },{onConflict:"endpoint"});
+  }catch(e){
+    console.warn("[Lineo] push subscribe:",e);
   }
 }
 async function requestNotifPermission(){
@@ -1096,6 +1127,7 @@ async function requestNotifPermission(){
     toast("Notificacoes ativadas!","ok");
     setTimeout(function(){fireNotif("Lineo","Notificacoes funcionando!");},500);
     startNotifPolling();
+    subscribeToPush();
   } else {
     toast("Permissao negada — ative nas configuracoes do navegador","warn");
   }
@@ -1999,8 +2031,9 @@ async function saveTask(){
     var idx=-1;
     for(var i=0;i<tasks.length;i++){if(tasks[i].id===editId){idx=i;break}}
     if(idx>=0)tasks[idx]=row;else tasks.unshift(row);
-  } else if(recur&&recurEnd&&baseFields.due){
+  } else if(recur&&baseFields.due){
     // Gerar série recorrente
+    var effRecurEnd=recurEnd||addDays(baseFields.due,365);
     var dates=[baseFields.due];
     var cur=baseFields.due;
     var safety=0;
@@ -2010,7 +2043,7 @@ async function saveTask(){
       else if(recur==="weekdays")cur=nextWeekday(cur);
       else if(recur==="weekly")cur=addDays(cur,7);
       else if(recur==="monthly")cur=addMonths(cur,1);
-      if(cur>recurEnd)break;
+      if(cur>effRecurEnd)break;
       dates.push(cur);
     }
     var groupId="trec"+Date.now();
