@@ -1013,12 +1013,12 @@ function renderProductivity(){
   var weekDone=weekTasks.filter(function(t){return t.done}).length;
   var weekTotal=weekTasks.length;
   var overdue=tasks.filter(function(t){return !t.done&&t.due&&t.due<toDs(today)}).length;
-  var pending=weekTasks.filter(function(t){return !t.done}).length;
+  var pending=tasks.filter(function(t){return !t.done&&t.due&&t.due<=sunStr}).length;
   var rate=weekTotal>0?Math.round(weekDone/weekTotal*100):0;
 
-  // Por categoria
+  // Por categoria (apenas tarefas desta semana)
   var cats={};
-  tasks.forEach(function(t){
+  weekTasks.forEach(function(t){
     if(!t.category)return;
     if(!cats[t.category])cats[t.category]={total:0,done:0};
     cats[t.category].total++;
